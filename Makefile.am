@@ -178,7 +178,8 @@ dist_tmux_SOURCES = \
 	window-copy.c \
 	window.c \
 	xmalloc.c \
-	xterm-keys.c
+	xterm-keys.c \
+	tcl.c
 nodist_tmux_SOURCES = osdep-@PLATFORM@.c
 
 # Pile in all the compat/ stuff that is needed.
