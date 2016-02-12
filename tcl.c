@@ -1,12 +1,29 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <tcl.h>
 
 #include "tmux.h"
 
-Tcl_Interp * tcl_interp = NULL;
+enum cmd_retval cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq);
 
+const struct cmd_entry cmd_tcl_entry /* avoid auto-create cmd for this */
+=
+{
+	.name = "exec-tcl",
+	.alias = "tcl",
+
+	.args = { "", 0, -1 },
+	.usage = "[command]",
+
+	.tflag = 0,
+
+	.flags = 0,
+	.exec = cmd_tcl_exec
+};
+
+Tcl_Interp * tcl_interp = NULL;
 
 const char stacktrace[] = ""
 "proc stacktrace {} {\n"
@@ -27,20 +44,48 @@ const char stacktrace[] = ""
 "}\n"
 ;
 
-int impl_command1(
-    ClientData clientData,
-    Tcl_Interp *interp,
-    int objc,
-    Tcl_Obj * const * objv)
+//int impl_command1(
+//    ClientData clientData,
+//    Tcl_Interp *interp,
+//    int objc,
+//    Tcl_Obj * const * objv)
+//{
+//  printf("tcl call: cmd1\n");
+//  // Tcl_SetObjResult(interp, obj)
+//  Tcl_Eval(tcl_interp, "puts qwe");
+//  Tcl_Eval(tcl_interp, stacktrace);
+//  Tcl_Eval(tcl_interp, "puts [stacktrace]");
+//  Tcl_Eval(tcl_interp, "puts asd");
+//  return TCL_OK;
+//}
+
+struct cmd_q *global_cmdq;
+enum cmd_retval global_cmd_retval;
+
+int tcl2tmux_call(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
 {
-  printf("tcl call: cmd1\n");
-  // Tcl_SetObjResult(interp, obj)
-  Tcl_Eval(tcl_interp, "puts qwe");
-  Tcl_Eval(tcl_interp, stacktrace);
-  Tcl_Eval(tcl_interp, "puts [stacktrace]");
-  Tcl_Eval(tcl_interp, "puts asd");
-  return TCL_OK;
+  struct cmd c;
+  memset(&c, 0, sizeof(c));
+
+  c.entry = (struct cmd_entry *)clientData;
+  c.args = args_parse(c.entry->args.template, argc, argv);
+  // c.file = NULL;
+  // c.line = 0;
+  // c.flags = 0;
+  // c.qentry ?
+
+  global_cmd_retval = (*c.entry->exec)(&c, global_cmdq);
+
+  free(c.args);
+
+  return global_cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
+
+
 
 void tcl_init(int argc, char **argv)
 {
@@ -59,6 +104,26 @@ void tcl_init(int argc, char **argv)
 
   //Tcl_Finalize();
 
+  char cmdName[100] = "::tmux::";
+  for (const struct cmd_entry **pcmd_e = cmd_table; *pcmd_e; pcmd_e++) {
+    const struct cmd_entry *cmd_e = *pcmd_e;
+    if (cmd_e == &cmd_tcl_entry) continue;
+
+    Tcl_Command tcl_cmd;
+
+    if (cmd_e->name) {
+      strcpy(cmdName+8, cmd_e->name);
+      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName, &tcl2tmux_call, (ClientData)cmd_e, NULL);
+      log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
+    }
+
+    if (cmd_e->alias) {
+      strcpy(cmdName+8, cmd_e->alias);
+      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName, &tcl2tmux_call, (ClientData)cmd_e, NULL);
+      log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
+    }
+  }
+
   log_debug("tcl init ok");
   return;
 
@@ -75,6 +140,8 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
   struct session	*s = cmdq->state.tflag.s;
   struct winlink	*wl = cmdq->state.tflag.wl;
   struct window_pane	*wp = cmdq->state.tflag.wp;
+
+  global_cmdq = cmdq;
 
   if (args->argc == 0) return CMD_RETURN_NORMAL;
   for (int i=0; i < args->argc; i++) {
@@ -102,19 +169,4 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
   status_message_set(c, "%s", Tcl_GetStringResult(tcl_interp));
   return CMD_RETURN_NORMAL;
 }
-
-const struct cmd_entry cmd_tcl_entry /* avoid auto-create cmd for this */
-=
-{
-	.name = "exec-tcl",
-	.alias = "tcl",
-
-	.args = { "", 0, -1 },
-	.usage = "[command]",
-
-	.tflag = 0,
-
-	.flags = 0,
-	.exec = cmd_tcl_exec
-};
 
