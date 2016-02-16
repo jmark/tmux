@@ -17,9 +17,11 @@ const struct cmd_entry cmd_tcl_entry /* avoid auto-create cmd for this */
 	.args = { "", 0, -1 },
 	.usage = "[command]",
 
-	.tflag = 0,
+	.cflag = CMD_CLIENT_CANFAIL,
+	.tflag = CMD_PANE,
 
-	.flags = 0,
+	//.flags = 0,
+
 	.exec = cmd_tcl_exec
 };
 
@@ -78,7 +80,11 @@ int tcl2tmux_call(
   // c.flags = 0;
   // c.qentry ?
 
-  global_cmd_retval = (*c.entry->exec)(&c, global_cmdq);
+  if (cmd_prepare_state(&c, &global_cmdq, NULL) != 0) {
+    global_cmd_retval = CMD_RETURN_ERROR;
+  } else {
+    global_cmd_retval = (*c.entry->exec)(&c, global_cmdq);
+  }
 
   free(c.args);
 
@@ -143,6 +149,8 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
 
   global_cmdq = cmdq;
 
+  log_debug("%s:%d s=%p c=%p wl=%p wp=%p", __FILE__, __LINE__, s, c, wl, wp);
+
   if (args->argc == 0) return CMD_RETURN_NORMAL;
   for (int i=0; i < args->argc; i++) {
     log_debug(" tcl arg[%d]: <%s>", i, args->argv[i]);
@@ -159,7 +167,7 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
     }
     log_debug("tcl init ok");
   }
-  if (Tcl_Eval(tcl_interp, args->argv[0]) != TCL_OK) {
+  if (Tcl_Eval(tcl_interp, args->argv[0]) == TCL_ERROR) {
     log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
     cmdq_error(cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
     return CMD_RETURN_ERROR;
