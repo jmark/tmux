@@ -17,3 +17,8 @@ Makefile
 Makefile.in
 configure
 tmux.1.*
+
+.*.swp
+cscope.files
+cscope.out
+tmux-*.log
