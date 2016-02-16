@@ -136,6 +136,13 @@ cmd_bind_key_mode_table(struct cmd *self, struct cmd_q *cmdq, key_code key)
 		}
 		arg = args->argv[2];
 		break;
+	case MODEKEYCOPY_TCL:
+		if (args->argc > 3) {
+			cmdq_error(cmdq, "tcl command extra args");
+			return (CMD_RETURN_ERROR);
+		}
+		arg = args->argc == 3 ? args->argv[2] : NULL;
+		break;
 	default:
 		if (args->argc != 2) {
 			cmdq_error(cmdq, "no argument allowed");

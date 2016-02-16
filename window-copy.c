@@ -767,6 +767,9 @@ window_copy_key(struct window_pane *wp, struct client *c, struct session *sess,
 		s->sel.lineflag = LINE_SEL_NONE;
 		window_copy_rectangle_toggle(wp);
 		break;
+	case MODEKEYCOPY_TCL:
+                tcl_eval_client(arg, c);
+                break;
 	default:
 		break;
 	}

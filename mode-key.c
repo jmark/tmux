@@ -163,6 +163,8 @@ const struct mode_key_cmdstr mode_key_cmdstr_copy[] = {
 	{ MODEKEYCOPY_TOPLINE, "top-line" },
 	{ MODEKEYCOPY_UP, "cursor-up" },
 
+	{ MODEKEYCOPY_TCL, "tcl" },
+
 	{ 0, NULL }
 };
 

@@ -557,6 +557,8 @@ enum mode_key_cmd {
 	MODEKEYCOPY_STARTSELECTION,
 	MODEKEYCOPY_TOPLINE,
 	MODEKEYCOPY_UP,
+
+	MODEKEYCOPY_TCL,
 };
 
 /* Data required while mode keys are in use. */
@@ -2357,5 +2359,9 @@ void		 style_apply_update(struct grid_cell *, struct options *,
 		     const char *);
 int		 style_equal(const struct grid_cell *,
 		     const struct grid_cell *);
+/* tcl.c */
+int tcl_eval_client(const char *cmd,
+    struct client *client/* , struct session *session, struct window_pane *wp */);
+
 
 #endif /* TMUX_H */
