@@ -106,7 +106,8 @@ int tcl2tmux_call1(
   }
   global_cmdq->cmd = cmd_old;
 
-  free(c.args);
+  args_free(c.args);
+  //free(c.args);
 
   return global_cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
@@ -156,6 +157,62 @@ int tcl2tmux_call2(
 }
 
 
+void tcl_error(const char * str)
+{
+    cmdq_error(global_cmdq, "%s", str);
+    Tcl_AddErrorInfo(tcl_interp, str);
+    Tcl_SetErrorCode(tcl_interp, str, NULL);
+    Tcl_SetResult(tcl_interp, str, NULL);
+}
+
+
+extern const struct cmd_entry cmd_attach_session_entry;
+
+int tcl_format_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  global_cmd_retval = CMD_RETURN_NORMAL;
+  if (argc != 2) {
+    tcl_error("Usage: format string");
+    global_cmd_retval = CMD_RETURN_ERROR;
+    return TCL_ERROR;
+  }
+
+  struct cmd cmd;
+  memset(&cmd, 0, sizeof(cmd));
+
+  cmd.entry = &cmd_attach_session_entry;
+  char *aa[] = {"", NULL};
+  cmd.args = args_parse(cmd.entry->args.template, 1, aa);
+
+  if (cmd_prepare_state(&cmd, global_cmdq, NULL) != 0) {
+    tcl_error("format: prepare_state fail");
+    global_cmd_retval = CMD_RETURN_ERROR;
+  } else {
+    struct session	*s = global_cmdq->state.tflag.s;
+    struct client	*c = global_cmdq->client;
+    struct winlink	*wl = global_cmdq->state.tflag.wl;
+    struct window_pane	*wp = global_cmdq->state.tflag.wp;
+    struct format_tree	*ft;
+
+    ft = format_create(global_cmdq, 0);
+    format_defaults(ft, c, s, wl, wp);
+    char * str = format_expand(ft, argv[1]);
+// warning: incompatible pointer types passing 'void (void *)' to parameter of type 'Tcl_FreeProc *' (aka 'void (*)(char *)') [-Wincompatible-pointer-types]
+    Tcl_SetResult(tcl_interp, str, (Tcl_FreeProc*)free);
+
+    //free(str);
+    format_free(ft);
+  }
+
+  args_free(cmd.args);
+
+  return global_cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
+}
+
 
 void tcl_init(int argc, char **argv)
 {
@@ -196,6 +253,9 @@ void tcl_init(int argc, char **argv)
   }
 
   Tcl_Eval(tcl_interp, "proc tmux {args} { namespace eval ::tmux {*}$args }");
+
+  Tcl_CreateCommand( tcl_interp, "::tmux::format", &tcl_format_proc,
+      (ClientData) NULL, NULL ) ;
 
   log_debug("tcl init ok");
   return;
