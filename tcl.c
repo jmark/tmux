@@ -83,6 +83,19 @@ int tcl2tmux_call1(
   c.entry = (struct cmd_entry *)clientData;
   c.args = args_parse(c.entry->args.template, argc, argv);
 
+  // do some job of cmd_parse
+  if ((c.args == NULL) ||
+      (c.entry->args.lower != -1 && c.args->argc < c.entry->args.lower) ||
+      (c.entry->args.upper != -1 && c.args->argc > c.entry->args.upper))
+  {
+    cmdq_error(global_cmdq, "tmux::usage: %s %s", c.entry->name, c.entry->usage);
+    Tcl_AddErrorInfo(tcl_interp, "tmux wrong number of args");
+    Tcl_SetErrorCode(tcl_interp, "tmux wrong number of args", NULL);
+    Tcl_SetResult(tcl_interp, "tmux wrong number of args", NULL);
+    global_cmd_retval = CMD_RETURN_ERROR;
+    return TCL_ERROR;
+  }
+
   struct cmd *cmd_old = global_cmdq->cmd;
   global_cmdq->cmd = &c;
 
@@ -105,9 +118,25 @@ int tcl2tmux_call2(
        int argc,
        const char **argv)
 {
+  global_cmd_retval = CMD_RETURN_NORMAL;
+
   struct cmd *cmd = xcalloc(1, sizeof *cmd);
   cmd->entry = (struct cmd_entry *)clientData;
   cmd->args = args_parse(cmd->entry->args.template, argc, argv);
+
+  // do some job of cmd_parse
+  if ((cmd->args == NULL) ||
+      (cmd->entry->args.lower != -1 && cmd->args->argc < cmd->entry->args.lower) ||
+      (cmd->entry->args.upper != -1 && cmd->args->argc > cmd->entry->args.upper))
+  {
+    free(cmd);
+    cmdq_error(global_cmdq, "tmux::usage: %s %s", cmd->entry->name, cmd->entry->usage);
+    Tcl_AddErrorInfo(tcl_interp, "tmux wrong number of args");
+    Tcl_SetErrorCode(tcl_interp, "tmux wrong number of args", NULL);
+    Tcl_SetResult(tcl_interp, "tmux wrong number of args", NULL);
+    global_cmd_retval = CMD_RETURN_ERROR;
+    return TCL_ERROR;
+  }
 
   struct cmd_list *cmdlist = xcalloc(1, sizeof *cmdlist);
   cmdlist->references = 1;
