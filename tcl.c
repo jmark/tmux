@@ -312,18 +312,24 @@ void tcl_init(int argc, char **argv)
       strcpy(cmdName+8, cmd_e->name);
       tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName, &tcl2tmux_call, (ClientData)cmd_e, NULL);
       log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
+      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName+7, &tcl2tmux_call, (ClientData)cmd_e, NULL);
+      log_debug("Tcl_CreateCommand %s = %p", cmdName+7, tcl_cmd);
     }
 
     if (cmd_e->alias) {
       strcpy(cmdName+8, cmd_e->alias);
       tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName, &tcl2tmux_call, (ClientData)cmd_e, NULL);
       log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
+      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName+7, &tcl2tmux_call, (ClientData)cmd_e, NULL);
+      log_debug("Tcl_CreateCommand %s = %p", cmdName+7, tcl_cmd);
     }
   }
 
   Tcl_Eval(tcl_interp, "proc tmux {args} { namespace eval ::tmux {*}$args }");
 
   Tcl_CreateCommand( tcl_interp, "::tmux::format", &tcl_format_proc,
+      (ClientData) NULL, NULL ) ;
+  Tcl_CreateCommand( tcl_interp,        ":format", &tcl_format_proc,
       (ClientData) NULL, NULL ) ;
 
   log_debug("tcl init ok");
