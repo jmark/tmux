@@ -17,8 +17,8 @@ const struct cmd_entry cmd_tcl_entry /* avoid auto-create cmd for this */
 	.args = { "", 0, -1 },
 	.usage = "[command]",
 
-	.cflag = CMD_CLIENT_CANFAIL,
-	.tflag = CMD_PANE,
+	//.cflag = CMD_CLIENT_CANFAIL,
+	//.tflag = CMD_PANE,
 
 	//.flags = 0,
 
@@ -62,9 +62,16 @@ const char stacktrace[] = ""
 //}
 
 struct cmd_q *global_cmdq;
-enum cmd_retval global_cmd_retval;
+enum cmd_retval global_cmd_retval = CMD_RETURN_NORMAL;
 
-int tcl2tmux_call(
+#define tcl2tmux_call tcl2tmux_call2
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types-discards-qualifiers"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wunused-label"
+int tcl2tmux_call1(
        ClientData clientData,
        Tcl_Interp *interp,
        int argc,
@@ -75,18 +82,46 @@ int tcl2tmux_call(
 
   c.entry = (struct cmd_entry *)clientData;
   c.args = args_parse(c.entry->args.template, argc, argv);
-  // c.file = NULL;
-  // c.line = 0;
-  // c.flags = 0;
-  // c.qentry ?
 
-  if (cmd_prepare_state(&c, &global_cmdq, NULL) != 0) {
+  struct cmd *cmd_old = global_cmdq->cmd;
+  global_cmdq->cmd = &c;
+
+  if (cmd_prepare_state(&c, global_cmdq, NULL) != 0) {
     global_cmd_retval = CMD_RETURN_ERROR;
   } else {
     global_cmd_retval = (*c.entry->exec)(&c, global_cmdq);
   }
+  global_cmdq->cmd = cmd_old;
 
   free(c.args);
+
+  return global_cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
+}
+
+
+int tcl2tmux_call2(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  struct cmd *cmd = xcalloc(1, sizeof *cmd);
+  cmd->entry = (struct cmd_entry *)clientData;
+  cmd->args = args_parse(cmd->entry->args.template, argc, argv);
+
+  struct cmd_list *cmdlist = xcalloc(1, sizeof *cmdlist);
+  cmdlist->references = 1;
+  TAILQ_INIT(&cmdlist->list);
+
+  struct cmd_q *cmdq = cmdq_new(global_cmdq->client);
+  cmdq->parent = global_cmdq;
+
+  TAILQ_INSERT_TAIL(&cmdlist->list, cmd, qentry);
+
+  cmdq_run(cmdq, cmdlist, NULL);
+
+  cmd_list_free(cmdlist);
+  cmdq_free(cmdq);
 
   return global_cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
@@ -101,6 +136,7 @@ void tcl_init(int argc, char **argv)
     log_debug("Could not create interpreter!\n");
     return;
   }
+  // Tcl_InitStubs(interp, "8.*", 0) ?
 
   //Tcl_CreateObjCommand( tcl_interp, "cmd1", &impl_command1,
   //    (ClientData) NULL, NULL ) ;
@@ -130,6 +166,8 @@ void tcl_init(int argc, char **argv)
     }
   }
 
+  Tcl_Eval(tcl_interp, "proc tmux {args} { namespace eval ::tmux {*}$args }");
+
   log_debug("tcl init ok");
   return;
 
@@ -137,6 +175,9 @@ cleanup:
   log_debug("tcl init failed");
   tcl_interp = NULL;
 }
+
+#pragma clang diagnostic pop
+
 
 enum cmd_retval
 cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
@@ -172,9 +213,11 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
     cmdq_error(cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
     return CMD_RETURN_ERROR;
   }
-  log_debug("tcl ok: %s", Tcl_GetStringResult(tcl_interp));
-  cmdq_print(cmdq, "%s", Tcl_GetStringResult(tcl_interp));
-  status_message_set(c, "%s", Tcl_GetStringResult(tcl_interp));
+  log_debug("tcl ok: \"%s\"", Tcl_GetStringResult(tcl_interp));
+  if (*Tcl_GetStringResult(tcl_interp)) {
+    cmdq_print(cmdq, "%s", Tcl_GetStringResult(tcl_interp));
+    status_message_set(c, "%s", Tcl_GetStringResult(tcl_interp));
+  }
   return CMD_RETURN_NORMAL;
 }
 
