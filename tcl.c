@@ -83,6 +83,9 @@ extern const struct cmd_entry cmd_attach_session_entry;
 
 #define tcl2tmux_call tcl2tmux_call2
 
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wunused-label"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types-discards-qualifiers"
@@ -342,6 +345,63 @@ cleanup:
 
 #pragma clang diagnostic pop
 
+#define TCL_INTERP_CHECKINIT(ERROR_CODE) \
+  if (tcl_interp == NULL) { \
+    log_debug("tcl init..."); \
+    tcl_init(0, NULL); \
+    if (tcl_interp == NULL) { \
+      return global.cmd_retval = (ERROR_CODE); \
+    } \
+    log_debug("tcl init ok"); \
+  } else {} \
+// macro end
+
+
+int Tcl_EvalObjv(Tcl_Interp *interp,
+    int objc, Tcl_Obj *const objv[],
+    int flags);
+
+Tcl_DString * dstring_from_args(int argc, char ** argv)
+{
+  fatal("%s:%d: function %s not implemented", __FILE__, __LINE__, __func__);
+  return 0;
+}
+
+Tcl_Obj ** tclobjlist_from_args(int argc, char ** argv)
+{
+  Tcl_Obj ** ret = xcalloc(argc+1, sizeof(*ret));
+  for (int i = 0; i < argc; i++) {
+    Tcl_IncrRefCount(ret[i] = Tcl_NewStringObj(argv[i], -1));
+  }
+  ret[argc] = NULL;
+  return ret;
+}
+
+void tclobjv_free(Tcl_Obj **objv) {
+  for (Tcl_Obj **o = objv; *o; o++) {
+    Tcl_DecrRefCount(*o);
+  }
+  free(objv);
+}
+
+int tcl_eval_args(Tcl_Interp *interp, int argc, char **argv)
+{
+  if (argc == 0) return TCL_OK;
+  if (argc == 1) return Tcl_Eval(interp, argv[0]);
+
+  Tcl_Obj **objv = tclobjlist_from_args(argc, argv);
+  int ret = Tcl_EvalObjv(interp, argc, objv, 0);
+  tclobjv_free(objv);
+
+  return ret;
+}
+
+// eval_in_ns_and_convert_args ***
+int tcl_eval_args_in_namespace(Tcl_Interp *interp, const char *ns, int argc, char **argv)
+{
+  // make evalobjv: "namespace" "eval" ns *argv
+  return 0;
+}
 
 enum cmd_retval
 cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
@@ -361,21 +421,10 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
   for (int i=0; i < args->argc; i++) {
     log_debug(" tcl arg[%d]: <%s>", i, args->argv[i]);
   }
-  if (args->argc > 1) {
-    cmdq_error(cmdq, "Usage: tcl command: got %d args", args->argc);
-    return CMD_RETURN_ERROR;
-  }
 
-  if (tcl_interp == NULL) {
-    log_debug("tcl init...");
-    tcl_init(0, NULL);
-    if (tcl_interp == NULL) {
-      return CMD_RETURN_ERROR;
-    }
-    log_debug("tcl init ok");
-  }
+  TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
 
-  if (Tcl_Eval(tcl_interp, args->argv[0]) == TCL_ERROR) {
+  if (tcl_eval_args(tcl_interp, args->argc, args->argv) == TCL_ERROR) {
     log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
     cmdq_error(cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
     return CMD_RETURN_ERROR;
@@ -393,6 +442,8 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
 int tcl_eval_client(const char *tcl_str,
     struct client *client/* , struct session *session, struct window_pane *wp */)
 {
+  TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
+
   global.cmd_retval = CMD_RETURN_NORMAL;
 
   struct cmd *cmd = xcalloc(1, sizeof *cmd);
