@@ -682,4 +682,38 @@ int tcl_eval_client(const char *tcl_str,
   return ret;
 }
 
+int tcl_eval_cmdq(const char *tcl_str, struct cmd_q *cmdq)
+{
+  TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
+
+  global.cmd_retval = CMD_RETURN_NORMAL;
+
+  struct cmd *cmd = xcalloc(1, sizeof *cmd);
+  cmd->entry = &cmd_tcl_entry;
+  const char *argv[] = {"tcl", tcl_str, NULL};
+  cmd->args = args_parse(cmd->entry->args.template, 2, (char**)argv);
+
+  int ret = cmd_tcl_exec(cmd, cmdq);
+
+  // cmd_free: from cmd_list_free()
+  args_free(cmd->args);
+  free(cmd->file);
+  free(cmd);
+
+  return ret;
+}
+
+int tcl_load_config(const char *fname, struct cmd_q *cmdq)
+{
+  int ret = 0;
+  set_global_cmdq(cmdq);
+  if (Tcl_EvalFile(tcl_interp, fname) == TCL_ERROR) {
+    cfg_add_cause("%s: %s", fname, Tcl_GetStringResult(tcl_interp));
+    ret = -1;
+  }
+  set_global_cmdq(NULL);
+
+  return ret;
+}
+
 

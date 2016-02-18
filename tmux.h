@@ -51,6 +51,7 @@ struct tmuxproc;
 
 /* Default global configuration file. */
 #define TMUX_CONF "/etc/tmux.conf"
+#define TCMUX_CONF "/etc/tcmux.conf"
 
 /*
  * Minimum layout cell size, NOT including separator line. The scroll region
@@ -2365,6 +2366,7 @@ int		 style_equal(const struct grid_cell *,
 void tcl_init(int argc, char **argv);
 int tcl_eval_client(const char *cmd,
     struct client *client/* , struct session *session, struct window_pane *wp */);
+int tcl_load_config(const char *fname, struct cmd_q *cmdq);
 
 
 #endif /* TMUX_H */
