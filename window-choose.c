@@ -509,7 +509,7 @@ window_choose_get_item(struct window_pane *wp, key_code key,
 }
 
 void
-window_choose_key(struct window_pane *wp, __unused struct client *c,
+window_choose_key(struct window_pane *wp, struct client *c,
     __unused struct session *sess, key_code key, struct mouse_event *m)
 {
 	struct window_choose_mode_data	*data = wp->modedata;
@@ -519,6 +519,7 @@ window_choose_key(struct window_pane *wp, __unused struct client *c,
 	size_t				 input_len;
 	u_int				 items, n;
 	int				 idx;
+	const char			*arg;
 
 	items = ARRAY_LENGTH(&data->list);
 
@@ -554,7 +555,7 @@ window_choose_key(struct window_pane *wp, __unused struct client *c,
 		return;
 	}
 
-	switch (mode_key_lookup(&data->mdata, key, NULL)) {
+	switch (mode_key_lookup(&data->mdata, key, &arg)) {
 	case MODEKEYCHOICE_CANCEL:
 		window_choose_fire_callback(wp, NULL);
 		break;
@@ -731,6 +732,9 @@ window_choose_key(struct window_pane *wp, __unused struct client *c,
 			data->top = 0;
 		window_choose_redraw_screen(wp);
 		break;
+	case MODEKEY_TCL:
+                tcl_eval_client(arg, c);
+                break;
 	default:
 		idx = window_choose_index_key(data, key);
 		if (idx < 0 || (u_int) idx >= ARRAY_LENGTH(&data->list))

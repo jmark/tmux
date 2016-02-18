@@ -767,7 +767,7 @@ window_copy_key(struct window_pane *wp, struct client *c, struct session *sess,
 		s->sel.lineflag = LINE_SEL_NONE;
 		window_copy_rectangle_toggle(wp);
 		break;
-	case MODEKEYCOPY_TCL:
+	case MODEKEY_TCL:
                 tcl_eval_client(arg, c);
                 break;
 	default:
@@ -810,8 +810,9 @@ window_copy_key_input(struct window_pane *wp, key_code key)
 	int				 np;
 	struct paste_buffer		*pb;
 	u_char				 ch;
+	//const char			*arg;
 
-	switch (mode_key_lookup(&data->mdata, key, NULL)) {
+	switch (mode_key_lookup(&data->mdata, key, NULL /* &arg */)) {
 	case MODEKEYEDIT_CANCEL:
 		data->numprefix = -1;
 		return (-1);
@@ -889,6 +890,9 @@ window_copy_key_input(struct window_pane *wp, key_code key)
 		data->inputstr[inputlen - 2] = key;
 		data->inputstr[inputlen - 1] = '\0';
 		break;
+	//case MODEKEY_TCL:
+        //        tcl_eval_client(arg, c);
+        //        break;
 	default:
 		break;
 	}

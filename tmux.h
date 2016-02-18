@@ -456,6 +456,8 @@ enum mode_key_cmd {
 	MODEKEY_NONE,
 	MODEKEY_OTHER,
 
+	MODEKEY_TCL,
+
 	/* Editing keys. */
 	MODEKEYEDIT_BACKSPACE,
 	MODEKEYEDIT_CANCEL,
@@ -557,8 +559,6 @@ enum mode_key_cmd {
 	MODEKEYCOPY_STARTSELECTION,
 	MODEKEYCOPY_TOPLINE,
 	MODEKEYCOPY_UP,
-
-	MODEKEYCOPY_TCL,
 };
 
 /* Data required while mode keys are in use. */

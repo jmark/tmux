@@ -84,6 +84,8 @@ const struct mode_key_cmdstr mode_key_cmdstr_edit[] = {
 	{ MODEKEYEDIT_SWITCHMODESUBSTITUTELINE, "switch-mode-substitute-line" },
 	{ MODEKEYEDIT_TRANSPOSECHARS, "transpose-chars" },
 
+	{ MODEKEY_TCL, "tcl" },
+
 	{ 0, NULL }
 };
 
@@ -108,6 +110,8 @@ const struct mode_key_cmdstr mode_key_cmdstr_choice[] = {
 	{ MODEKEYCHOICE_TREE_EXPAND_ALL, "tree-expand-all" },
 	{ MODEKEYCHOICE_TREE_TOGGLE, "tree-toggle" },
 	{ MODEKEYCHOICE_UP, "up" },
+
+	{ MODEKEY_TCL, "tcl" },
 
 	{ 0, NULL }
 };
@@ -163,7 +167,7 @@ const struct mode_key_cmdstr mode_key_cmdstr_copy[] = {
 	{ MODEKEYCOPY_TOPLINE, "top-line" },
 	{ MODEKEYCOPY_UP, "cursor-up" },
 
-	{ MODEKEYCOPY_TCL, "tcl" },
+	{ MODEKEY_TCL, "tcl" },
 
 	{ 0, NULL }
 };

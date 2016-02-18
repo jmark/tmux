@@ -813,9 +813,10 @@ status_prompt_key(struct client *c, key_code key)
 	const char		*histstr, *bufdata, *wsep = NULL;
 	u_char			 ch;
 	size_t			 size, n, off, idx, bufsize;
+	const char		*arg;
 
 	size = strlen(c->prompt_buffer);
-	switch (mode_key_lookup(&c->prompt_mdata, key, NULL)) {
+	switch (mode_key_lookup(&c->prompt_mdata, key, &arg)) {
 	case MODEKEYEDIT_CURSORLEFT:
 		if (c->prompt_index > 0) {
 			c->prompt_index--;
@@ -1130,6 +1131,9 @@ status_prompt_key(struct client *c, key_code key)
 
 		c->flags |= CLIENT_STATUS;
 		break;
+	case MODEKEY_TCL:
+                tcl_eval_client(arg, c);
+                break;
 	default:
 		break;
 	}
