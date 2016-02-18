@@ -563,6 +563,28 @@ int tcl_copymodeselection_proc(
   return TCL_OK;
 }
 
+int tcl_print_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  for (int i=1; i < argc; i++) {
+    cmdq_print(global.cmdq, "%s", argv[i]);
+  }
+  return TCL_OK;
+}
+
+int tcl_nop_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  return TCL_OK;
+}
+
+
 void tcl_create_command_and_aliases(
     Tcl_Interp *interp,
     const char *cmdName1, Tcl_CmdProc *proc,
@@ -660,6 +682,12 @@ void tcl_init(int argc, char **argv)
       (ClientData) 0, NULL ) ;
 
   tcl_create_command_and_aliases(tcl_interp, "copy-mode-selection", &tcl_copymodeselection_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_and_aliases(tcl_interp, "print", &tcl_print_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_and_aliases(tcl_interp, "nop", &tcl_nop_proc,
       (ClientData) 0, NULL ) ;
 
   log_debug("tcl init ok");
