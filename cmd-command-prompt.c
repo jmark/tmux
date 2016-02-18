@@ -145,17 +145,22 @@ cmd_command_prompt_callback(void *data, const char *s)
 		return (1);
 	}
 
-	if (cmd_string_parse(new_template, &cmdlist, NULL, 0, &cause) != 0) {
-		if (cause != NULL) {
-			*cause = toupper((u_char) *cause);
-			status_message_set(c, "%s", cause);
-			free(cause);
+	if (options_get_number(global_options, "tcl")) {
+		if (tcl_eval_client(new_template, c) != CMD_RETURN_NORMAL) {
+			return 0;
 		}
-		return (0);
+	} else {
+		if (cmd_string_parse(new_template, &cmdlist, NULL, 0, &cause) != 0) {
+			if (cause != NULL) {
+				*cause = toupper((u_char) *cause);
+				status_message_set(c, "%s", cause);
+				free(cause);
+			}
+			return (0);
+		}
+		cmdq_run(c->cmdq, cmdlist, NULL);
+		cmd_list_free(cmdlist);
 	}
-
-	cmdq_run(c->cmdq, cmdlist, NULL);
-	cmd_list_free(cmdlist);
 
 	if (c->prompt_callbackfn != (void *) &cmd_command_prompt_callback)
 		return (1);

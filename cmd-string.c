@@ -68,6 +68,8 @@ cmd_string_parse(const char *s, struct cmd_list **cmdlist, const char *file,
 	const char     *whitespace, *equals;
 	size_t		len;
 
+	log_debug("cmd_string_parse: <%s>", s);
+
 	argv = NULL;
 	argc = 0;
 
