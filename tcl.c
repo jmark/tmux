@@ -248,7 +248,7 @@ int tcl_format_proc(
 {
   global.cmd_retval = CMD_RETURN_NORMAL;
   if (argc != 2) {
-    tcl_error("Usage: format string");
+    tcl_error("Usage: format string | format-time string");
     global.cmd_retval = CMD_RETURN_ERROR;
     return TCL_ERROR;
   }
@@ -272,7 +272,12 @@ int tcl_format_proc(
 
     ft = format_create(global.cmdq, 0);
     format_defaults(ft, c, s, wl, wp);
-    char * str = format_expand(ft, argv[1]);
+    char * str;
+    if (clientData == 0) {
+      str = format_expand(ft, argv[1]);
+    } else {
+      str = format_expand_time(ft, argv[1], time(NULL));
+    }
 // warning: incompatible pointer types passing 'void (void *)' to parameter of type 'Tcl_FreeProc *' (aka 'void (*)(char *)') [-Wincompatible-pointer-types]
     Tcl_SetResult(tcl_interp, str, (Tcl_FreeProc*)free);
 
@@ -461,6 +466,34 @@ usage:
 }
 
 
+void tcl_create_command_and_aliases(
+    Tcl_Interp *interp,
+    const char *cmdName1, Tcl_CmdProc *proc,
+    ClientData clientData,
+    Tcl_CmdDeleteProc *deleteProc)
+{
+  Tcl_Command tcl_cmd;
+  char cmdName2[100] = "::tmux::";
+
+  strcpy(cmdName2+8, cmdName1);
+
+  // create ::tmux::command
+  tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName2, proc, clientData, deleteProc);
+  log_debug("Tcl_CreateCommand %s -> %s = %p", cmdName1, cmdName2, tcl_cmd);
+  // create :command
+  tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName2+7, proc, clientData, deleteProc);
+  log_debug("Tcl_CreateCommand %s -> %s = %p", cmdName1, cmdName2+7, tcl_cmd);
+
+  // ::command
+  Tcl_CmdInfo cmdInfo;
+  if (!Tcl_GetCommandInfo(interp, cmdName2+6, &cmdInfo)) {
+    tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName2+6, proc, clientData, deleteProc);
+    log_debug("Tcl_CreateCommand %s -> %s = %p", cmdName1, cmdName2+6, tcl_cmd);
+  } else {
+    log_debug("Tcl_CreateCommand %s -> %s not created due to name clash!", cmdName1, cmdName2+6);
+  }
+}
+
 void tcl_init(int argc, char **argv)
 {
   Tcl_FindExecutable(NULL /*argv[0]*/);
@@ -479,65 +512,45 @@ void tcl_init(int argc, char **argv)
 
   //Tcl_Finalize();
 
-  char cmdName[100] = "::tmux::";
   for (const struct cmd_entry **pcmd_e = cmd_table; *pcmd_e; pcmd_e++) {
     const struct cmd_entry *cmd_e = *pcmd_e;
     if (cmd_e == &cmd_tcl_entry) continue;
 
-    Tcl_Command tcl_cmd;
-
     if (cmd_e->name) {
-      strcpy(cmdName+8, cmd_e->name);
-      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName, &tcl2tmux_call, (ClientData)cmd_e, NULL);
-      log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
-      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName+7, &tcl2tmux_call, (ClientData)cmd_e, NULL);
-      log_debug("Tcl_CreateCommand %s = %p", cmdName+7, tcl_cmd);
+      tcl_create_command_and_aliases(tcl_interp, cmd_e->name, &tcl2tmux_call, (ClientData)cmd_e, NULL);
     }
 
     if (cmd_e->alias) {
-      strcpy(cmdName+8, cmd_e->alias);
-      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName, &tcl2tmux_call, (ClientData)cmd_e, NULL);
-      log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
-      tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName+7, &tcl2tmux_call, (ClientData)cmd_e, NULL);
-      log_debug("Tcl_CreateCommand %s = %p", cmdName+7, tcl_cmd);
+      tcl_create_command_and_aliases(tcl_interp, cmd_e->alias, &tcl2tmux_call, (ClientData)cmd_e, NULL);
     }
   }
 
-  //
   Tcl_Eval(tcl_interp, "proc tmux {args} { namespace eval ::tmux {*}$args }");
 
   Tcl_Eval(tcl_interp, "proc read_file {fname} { set fd [open $fname r]; set ret [read $fd]; close $fd; return $ret; }");
   Tcl_Eval(tcl_interp, "proc write_file {fname, txt} { set fd [open $fname w]; put -nonewline $fd $txt; close $fd; }");
 
-  //
-  Tcl_CreateCommand( tcl_interp, "::tmux::format", &tcl_format_proc,
-      (ClientData) NULL, NULL ) ;
-  Tcl_CreateCommand( tcl_interp,        ":format", &tcl_format_proc,
-      (ClientData) NULL, NULL ) ;
-  // ... and the short form
-  Tcl_CreateCommand( tcl_interp, "::tmux::f", &tcl_format_proc,
-      (ClientData) NULL, NULL ) ;
-  Tcl_CreateCommand( tcl_interp,        ":f", &tcl_format_proc,
-      (ClientData) NULL, NULL ) ;
-
-  Tcl_CreateCommand( tcl_interp, "::tmux::parse", &tcl_tmuxparse_proc,
+  tcl_create_command_and_aliases(tcl_interp, "format", &tcl_format_proc,
       (ClientData) 0, NULL ) ;
-  Tcl_CreateCommand( tcl_interp,        ":parse", &tcl_tmuxparse_proc,
+  tcl_create_command_and_aliases(tcl_interp, "f", &tcl_format_proc,
       (ClientData) 0, NULL ) ;
-
-  Tcl_CreateCommand( tcl_interp, "::tmux::parse2script", &tcl_tmuxparse_proc,
+  tcl_create_command_and_aliases(tcl_interp, "format-time", &tcl_format_proc,
       (ClientData) 1, NULL ) ;
-  Tcl_CreateCommand( tcl_interp,        ":parse2script", &tcl_tmuxparse_proc,
+  tcl_create_command_and_aliases(tcl_interp, "ft", &tcl_format_proc,
       (ClientData) 1, NULL ) ;
 
-  Tcl_Eval(tcl_interp, "proc ::tmux::parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
+  tcl_create_command_and_aliases(tcl_interp, "parse", &tcl_tmuxparse_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_and_aliases(tcl_interp, "parse2script", &tcl_tmuxparse_proc,
+      (ClientData) 1, NULL ) ;
+
+  Tcl_Eval(tcl_interp, "proc         parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
   Tcl_Eval(tcl_interp, "proc        :parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
-  Tcl_Eval(tcl_interp, "proc ::tmux::parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
+  Tcl_Eval(tcl_interp, "proc         parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
   Tcl_Eval(tcl_interp, "proc        :parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
 
-  Tcl_CreateCommand( tcl_interp, "::tmux::_output-divert", &tcl_outputdivert_proc,
-      (ClientData) 0, NULL ) ;
-  Tcl_CreateCommand( tcl_interp,        ":_output-divert", &tcl_outputdivert_proc,
+  tcl_create_command_and_aliases(tcl_interp, "_output-divert", &tcl_outputdivert_proc,
       (ClientData) 0, NULL ) ;
 
   Tcl_Eval(tcl_interp, "proc output-of-txt {code} { :_output-divert start txt; uplevel $code; return [:_output-divert end]; }");
