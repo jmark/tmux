@@ -510,7 +510,7 @@ window_choose_get_item(struct window_pane *wp, key_code key,
 
 void
 window_choose_key(struct window_pane *wp, struct client *c,
-    __unused struct session *sess, key_code key, struct mouse_event *m)
+    struct session *sess, key_code key, struct mouse_event *m)
 {
 	struct window_choose_mode_data	*data = wp->modedata;
 	struct screen			*s = &data->screen;
@@ -733,7 +733,7 @@ window_choose_key(struct window_pane *wp, struct client *c,
 		window_choose_redraw_screen(wp);
 		break;
 	case MODEKEY_TCL:
-                tcl_eval_client(arg, c);
+                tcl_eval_client(arg, c, sess, wp);
                 break;
 	default:
 		idx = window_choose_index_key(data, key);

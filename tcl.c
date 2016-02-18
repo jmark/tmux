@@ -539,6 +539,29 @@ int tcl_pbcontent_proc(
   return TCL_OK;
 }
 
+/*
+ * This one works only when bound to a key in copy-mode
+*/
+extern const struct window_mode window_copy_mode;
+void * window_copy_get_selection(struct window_pane *wp, size_t *len);
+int tcl_copymodeselection_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  struct window_pane *wp = global.wp;
+  if (!wp || wp->mode != &window_copy_mode) {
+    Tcl_SetResult(interp, "", NULL);
+    return TCL_OK;
+  }
+
+  size_t len;
+  char * buf = window_copy_get_selection(wp, &len);
+  Tcl_SetResult(interp, buf, (Tcl_FreeProc*)free);
+
+  return TCL_OK;
+}
 
 void tcl_create_command_and_aliases(
     Tcl_Interp *interp,
@@ -634,6 +657,9 @@ void tcl_init(int argc, char **argv)
   tcl_create_command_and_aliases(tcl_interp, "pbcontent", &tcl_pbcontent_proc,
       (ClientData) 0, NULL ) ;
   tcl_create_command_and_aliases(tcl_interp, "pblist", &tcl_pblist_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_and_aliases(tcl_interp, "copy-mode-selection", &tcl_copymodeselection_proc,
       (ClientData) 0, NULL ) ;
 
   log_debug("tcl init ok");
@@ -741,11 +767,13 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
 }
 
 int tcl_eval_client(const char *tcl_str,
-    struct client *client/* , struct session *session, struct window_pane *wp */)
+    struct client *client, struct session *session, struct window_pane *wp)
 {
   TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
 
   global.cmd_retval = CMD_RETURN_NORMAL;
+  global.s = session;
+  global.wp = wp;
 
   struct cmd *cmd = xcalloc(1, sizeof *cmd);
   cmd->entry = &cmd_tcl_entry;
@@ -758,6 +786,9 @@ int tcl_eval_client(const char *tcl_str,
   args_free(cmd->args);
   free(cmd->file);
   free(cmd);
+
+  global.wp = NULL;
+  global.s = NULL;
 
   return ret;
 }

@@ -1132,7 +1132,7 @@ status_prompt_key(struct client *c, key_code key)
 		c->flags |= CLIENT_STATUS;
 		break;
 	case MODEKEY_TCL:
-                tcl_eval_client(arg, c);
+                tcl_eval_client(arg, c, sess, NULL);
                 break;
 	default:
 		break;

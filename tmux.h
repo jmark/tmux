@@ -2365,7 +2365,7 @@ int		 style_equal(const struct grid_cell *,
 /* tcl.c */
 void tcl_init(int argc, char **argv);
 int tcl_eval_client(const char *cmd,
-    struct client *client/* , struct session *session, struct window_pane *wp */);
+    struct client *client, struct session *session, struct window_pane *wp);
 int tcl_load_config(const char *fname, struct cmd_q *cmdq);
 
 

@@ -146,7 +146,7 @@ cmd_command_prompt_callback(void *data, const char *s)
 	}
 
 	if (options_get_number(global_options, "tcl")) {
-		if (tcl_eval_client(new_template, c) != CMD_RETURN_NORMAL) {
+		if (tcl_eval_client(new_template, c, NULL, NULL) != CMD_RETURN_NORMAL) {
 			return 0;
 		}
 	} else {

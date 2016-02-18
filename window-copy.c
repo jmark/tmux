@@ -768,7 +768,7 @@ window_copy_key(struct window_pane *wp, struct client *c, struct session *sess,
 		window_copy_rectangle_toggle(wp);
 		break;
 	case MODEKEY_TCL:
-                tcl_eval_client(arg, c);
+                tcl_eval_client(arg, c, sess, wp);
                 break;
 	default:
 		break;
@@ -891,7 +891,7 @@ window_copy_key_input(struct window_pane *wp, key_code key)
 		data->inputstr[inputlen - 1] = '\0';
 		break;
 	//case MODEKEY_TCL:
-        //        tcl_eval_client(arg, c);
+        //        tcl_eval_client(arg, c, sess, wp);
         //        break;
 	default:
 		break;
