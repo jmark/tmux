@@ -11,8 +11,8 @@ enum cmd_retval cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq);
 const struct cmd_entry cmd_tcl_entry /* avoid auto-create cmd for this */
 =
 {
-	.name = "exec-tcl",
-	.alias = "tcl",
+	.name = "tcl",
+	.alias = "t",
 
 	.args = { "", 0, -1 },
 	.usage = "[command]",
@@ -285,6 +285,69 @@ int tcl_format_proc(
   return global.cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
 
+int tcl_tmuxparse_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  //
+  if (argc != 2) {
+    tcl_error("Usage: tmux::parse tmux-command-string");
+    return TCL_ERROR;
+  }
+
+  //
+  struct cmd_list *cmdlist = NULL;
+  char * cause = NULL;
+
+  if (cmd_string_parse(argv[1], &cmdlist, argv[1], 1, &cause) || !cmdlist) {
+    tcl_error(cause);
+    if (cause) free(cause);
+    return TCL_ERROR;
+  }
+  if (cause) free(cause);
+
+  //
+  if ((int)clientData == 0) {
+    Tcl_Obj *ret = Tcl_NewListObj(0, NULL);
+
+    struct cmd *cmd;
+    TAILQ_FOREACH(cmd, &cmdlist->list, qentry) {
+      Tcl_Obj * tcl_cmd = Tcl_NewListObj(0, NULL);
+      Tcl_ListObjAppendElement(interp, tcl_cmd, Tcl_NewStringObj(cmd->entry->name, -1));
+      for (int i = 0; i < cmd->args->argc; i++) {
+        Tcl_ListObjAppendElement(interp, tcl_cmd, Tcl_NewStringObj(cmd->args->argv[i], -1));
+      }
+      Tcl_ListObjAppendElement(interp, ret, tcl_cmd);
+    }
+
+    Tcl_SetObjResult(tcl_interp, ret);
+  } else if ((int)clientData == 1) {
+    Tcl_DString dstr;
+    Tcl_DStringInit(&dstr);
+
+    struct cmd *cmd;
+    TAILQ_FOREACH(cmd, &cmdlist->list, qentry) {
+      Tcl_DStringAppendElement(&dstr, cmd->entry->name);
+      for (int i = 0; i < cmd->args->argc; i++) {
+        Tcl_DStringAppendElement(&dstr, cmd->args->argv[i]);
+      }
+      Tcl_DStringAppend(&dstr, " ; \n", -1);
+    }
+
+    Tcl_DStringResult(interp, &dstr);
+    Tcl_DStringFree(&dstr);
+  } else {
+    fatal("%s:%d: %s: internal error", __FILE__, __LINE__, __func__);
+  }
+
+  //
+  cmd_list_free(cmdlist);
+
+  return TCL_OK;
+}
+
 
 void tcl_init(int argc, char **argv)
 {
@@ -334,6 +397,26 @@ void tcl_init(int argc, char **argv)
       (ClientData) NULL, NULL ) ;
   Tcl_CreateCommand( tcl_interp,        ":format", &tcl_format_proc,
       (ClientData) NULL, NULL ) ;
+  // ... and the short form
+  Tcl_CreateCommand( tcl_interp, "::tmux::f", &tcl_format_proc,
+      (ClientData) NULL, NULL ) ;
+  Tcl_CreateCommand( tcl_interp,        ":f", &tcl_format_proc,
+      (ClientData) NULL, NULL ) ;
+
+  Tcl_CreateCommand( tcl_interp, "::tmux::parse", &tcl_tmuxparse_proc,
+      (ClientData) 0, NULL ) ;
+  Tcl_CreateCommand( tcl_interp,        ":parse", &tcl_tmuxparse_proc,
+      (ClientData) 0, NULL ) ;
+
+  Tcl_CreateCommand( tcl_interp, "::tmux::parse2script", &tcl_tmuxparse_proc,
+      (ClientData) 1, NULL ) ;
+  Tcl_CreateCommand( tcl_interp,        ":parse2script", &tcl_tmuxparse_proc,
+      (ClientData) 1, NULL ) ;
+
+  Tcl_Eval(tcl_interp, "proc ::tmux::parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
+  Tcl_Eval(tcl_interp, "proc        :parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
+  Tcl_Eval(tcl_interp, "proc ::tmux::parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
+  Tcl_Eval(tcl_interp, "proc        :parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
 
   log_debug("tcl init ok");
   return;
