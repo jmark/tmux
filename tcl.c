@@ -465,6 +465,80 @@ usage:
   return TCL_ERROR;
 }
 
+int tcl_pblist_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  Tcl_DString ret;
+  Tcl_DStringInit(&ret);
+
+  struct paste_buffer *pb = NULL;
+  while ((pb = paste_walk(pb)) != NULL) {
+    // TODO: fix possible zero-byte in string
+    Tcl_DStringAppendElement(&ret, paste_buffer_data(pb, NULL));
+  }
+
+  Tcl_DStringResult(interp, &ret);
+  Tcl_DStringFree(&ret);
+
+  return TCL_OK;
+}
+
+int tcl_pbcopy_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  if (argc != 2) {
+    tcl_error(
+        "Usage: pbcopy string\n"
+        " Put the string into the paste buffer");
+    return TCL_ERROR;
+  }
+
+  // TODO: fix possible zero-byte in string
+  paste_add(xstrdup(argv[1]), strlen(argv[1]));
+
+  return TCL_OK;
+}
+
+int tcl_pbpaste_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  tcl_error("pbpaste not implemented. use :send-keys [pbcontent]");
+  return TCL_ERROR;
+}
+
+int tcl_pbcontent_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  if (argc != 1) {
+    tcl_error(
+        "Usage: pbcontent\n"
+        " Return the current paste buffer content");
+    return TCL_ERROR;
+  }
+
+  struct paste_buffer *pb = paste_get_top(NULL);
+  if (pb) {
+    Tcl_SetResult(interp,
+        xstrdup(paste_buffer_data(pb, NULL)), (Tcl_FreeProc*)free);
+  } else {
+    Tcl_SetResult(interp, "", NULL);
+  }
+
+  return TCL_OK;
+}
+
 
 void tcl_create_command_and_aliases(
     Tcl_Interp *interp,
@@ -541,10 +615,8 @@ void tcl_init(int argc, char **argv)
 
   tcl_create_command_and_aliases(tcl_interp, "parse", &tcl_tmuxparse_proc,
       (ClientData) 0, NULL ) ;
-
   tcl_create_command_and_aliases(tcl_interp, "parse2script", &tcl_tmuxparse_proc,
       (ClientData) 1, NULL ) ;
-
   Tcl_Eval(tcl_interp, "proc         parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
   Tcl_Eval(tcl_interp, "proc        :parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
   Tcl_Eval(tcl_interp, "proc         parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
@@ -552,9 +624,17 @@ void tcl_init(int argc, char **argv)
 
   tcl_create_command_and_aliases(tcl_interp, "_output-divert", &tcl_outputdivert_proc,
       (ClientData) 0, NULL ) ;
-
   Tcl_Eval(tcl_interp, "proc output-of-txt {code} { :_output-divert start txt; uplevel $code; return [:_output-divert end]; }");
   Tcl_Eval(tcl_interp, "proc output-of-list {code} { :_output-divert start list; uplevel $code; return [:_output-divert end]; }");
+
+  tcl_create_command_and_aliases(tcl_interp, "pbcopy", &tcl_pbcopy_proc,
+      (ClientData) 0, NULL ) ;
+  tcl_create_command_and_aliases(tcl_interp, "pbpaste", &tcl_pbpaste_proc,
+      (ClientData) 0, NULL ) ;
+  tcl_create_command_and_aliases(tcl_interp, "pbcontent", &tcl_pbcontent_proc,
+      (ClientData) 0, NULL ) ;
+  tcl_create_command_and_aliases(tcl_interp, "pblist", &tcl_pblist_proc,
+      (ClientData) 0, NULL ) ;
 
   log_debug("tcl init ok");
   return;
@@ -705,6 +785,8 @@ int tcl_eval_cmdq(const char *tcl_str, struct cmd_q *cmdq)
 
 int tcl_load_config(const char *fname, struct cmd_q *cmdq)
 {
+  TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
+
   int ret = 0;
   set_global_cmdq(cmdq);
   if (Tcl_EvalFile(tcl_interp, fname) == TCL_ERROR) {
