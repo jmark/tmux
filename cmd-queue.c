@@ -66,8 +66,9 @@ cmdq_free(struct cmd_q *cmdq)
 }
 
 /* Show message from command. */
+void (* printflike(2, 3) cmdq_print)(struct cmd_q *cmdq, const char *fmt, ...) = cmdq_print_orig;
 void
-cmdq_print(struct cmd_q *cmdq, const char *fmt, ...)
+cmdq_print_orig(struct cmd_q *cmdq, const char *fmt, ...)
 {
 	struct client	*c = cmdq->client;
 	struct window	*w;
@@ -103,8 +104,9 @@ cmdq_print(struct cmd_q *cmdq, const char *fmt, ...)
 }
 
 /* Show error from command. */
+void (* printflike(2, 3) cmdq_error)(struct cmd_q *cmdq, const char *fmt, ...) = cmdq_error_orig;
 void
-cmdq_error(struct cmd_q *cmdq, const char *fmt, ...)
+cmdq_error_orig(struct cmd_q *cmdq, const char *fmt, ...)
 {
 	struct client	*c = cmdq->client;
 	struct cmd	*cmd = cmdq->cmd;

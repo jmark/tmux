@@ -1839,8 +1839,10 @@ char		*cmd_list_print(struct cmd_list *);
 /* cmd-queue.c */
 struct cmd_q	*cmdq_new(struct client *);
 int		 cmdq_free(struct cmd_q *);
-void printflike(2, 3) cmdq_print(struct cmd_q *, const char *, ...);
-void printflike(2, 3) cmdq_error(struct cmd_q *, const char *, ...);
+void printflike(2, 3) cmdq_print_orig(struct cmd_q *cmdq, const char *fmt, ...);
+void printflike(2, 3) cmdq_error_orig(struct cmd_q *cmdq, const char *fmt, ...);
+void (* printflike(2, 3) cmdq_print)(struct cmd_q *, const char *, ...);
+void (* printflike(2, 3) cmdq_error)(struct cmd_q *, const char *, ...);
 void		 cmdq_guard(struct cmd_q *, const char *, int);
 void		 cmdq_run(struct cmd_q *, struct cmd_list *,
 		     struct mouse_event *);
@@ -2360,6 +2362,7 @@ void		 style_apply_update(struct grid_cell *, struct options *,
 int		 style_equal(const struct grid_cell *,
 		     const struct grid_cell *);
 /* tcl.c */
+void tcl_init(int argc, char **argv);
 int tcl_eval_client(const char *cmd,
     struct client *client/* , struct session *session, struct window_pane *wp */);
 

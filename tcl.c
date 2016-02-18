@@ -348,6 +348,118 @@ int tcl_tmuxparse_proc(
   return TCL_OK;
 }
 
+//Tcl_DString *tcl_global_dstrptr = NULL;
+void (*on_cmdq_print)(char * txt, char * txt_utf8) = NULL;
+
+void printflike(2, 3) tcl_cmdq_print_divert(struct cmd_q *cmdq, const char *fmt, ...)
+{
+  va_list ap;
+  char *txt, *msg;
+
+  va_start(ap, fmt);
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+  vasprintf(&txt, fmt, ap);
+#pragma clang diagnostic pop
+  msg = utf8_sanitize(txt);
+  on_cmdq_print(txt, msg);
+  free(txt);
+  free(msg);
+
+  va_end(ap);
+}
+
+void cmdq_print_divert_start(void (*cb)(char * txt, char * txt_utf8))
+{
+  on_cmdq_print = cb;
+  cmdq_print = tcl_cmdq_print_divert;
+}
+
+void cmdq_print_divert_end()
+{
+  on_cmdq_print = NULL;
+  cmdq_print = cmdq_print_orig;
+}
+
+int cmdq_print_is_diverting()
+{
+  return on_cmdq_print != NULL;
+}
+
+
+
+Tcl_DString tcl_outputdivert_str;
+
+void tcl_outputof_proc_capture_txt_cb(char * txt, char * txt_utf8)
+{
+  log_debug("%s:%d: output divert txt: <%s>", __FILE__, __LINE__, txt);
+  log_debug("%s:%d: output divert utf: <%s>", __FILE__, __LINE__, txt_utf8);
+
+  if (Tcl_DStringLength(&tcl_outputdivert_str)) {
+    Tcl_DStringAppend(&tcl_outputdivert_str, "\n", 1);
+  }
+  Tcl_DStringAppend(&tcl_outputdivert_str, txt, -1);
+}
+
+void tcl_outputof_proc_capture_list_cb(char * txt, char * txt_utf8)
+{
+  log_debug("%s:%d: output divert txt: <%s>", __FILE__, __LINE__, txt);
+  log_debug("%s:%d: output divert utf: <%s>", __FILE__, __LINE__, txt_utf8);
+
+  Tcl_DStringAppendElement(&tcl_outputdivert_str, txt);
+}
+
+int tcl_outputdivert_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  if (argc < 2) goto usage;
+  int is_start = strcmp(argv[1], "start") == 0;
+  int is_end = strcmp(argv[1], "end") == 0;
+  if (!is_start && !is_end) goto usage;
+
+  //
+  if (is_start) {
+    if (argc != 3) goto usage;
+    int is_list = strcmp(argv[2], "list") == 0;
+    int is_txt = strcmp(argv[2], "txt") == 0;
+    if (!is_list && !is_txt) goto usage;
+
+    if (cmdq_print_is_diverting()) {
+      return TCL_OK;
+    }
+    Tcl_DStringInit(&tcl_outputdivert_str);
+    cmdq_print_divert_start(is_txt ? tcl_outputof_proc_capture_txt_cb : tcl_outputof_proc_capture_list_cb);
+
+    return TCL_OK;
+  } else {
+    // end
+    if (argc != 2) goto usage;
+
+    if (!cmdq_print_is_diverting()) {
+      tcl_error("Not diverting");
+      return TCL_ERROR;
+    }
+    Tcl_DStringResult(interp, &tcl_outputdivert_str);
+    Tcl_DStringFree(&tcl_outputdivert_str);
+    cmdq_print_divert_end();
+
+    return TCL_OK;
+  }
+
+usage:
+  tcl_error(
+      "Usage: tmux::_output-divert {start {txt | list} | end}}\n"
+      "    tmux::_output-divert start txt\n"
+      "    tmux::_output-divert start list\n"
+      "    set x [tmux::_output-divert end]\n"
+      );
+  return TCL_ERROR;
+}
+
 
 void tcl_init(int argc, char **argv)
 {
@@ -391,8 +503,13 @@ void tcl_init(int argc, char **argv)
     }
   }
 
+  //
   Tcl_Eval(tcl_interp, "proc tmux {args} { namespace eval ::tmux {*}$args }");
 
+  Tcl_Eval(tcl_interp, "proc read_file {fname} { set fd [open $fname r]; set ret [read $fd]; close $fd; return $ret; }");
+  Tcl_Eval(tcl_interp, "proc write_file {fname, txt} { set fd [open $fname w]; put -nonewline $fd $txt; close $fd; }");
+
+  //
   Tcl_CreateCommand( tcl_interp, "::tmux::format", &tcl_format_proc,
       (ClientData) NULL, NULL ) ;
   Tcl_CreateCommand( tcl_interp,        ":format", &tcl_format_proc,
@@ -417,6 +534,14 @@ void tcl_init(int argc, char **argv)
   Tcl_Eval(tcl_interp, "proc        :parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
   Tcl_Eval(tcl_interp, "proc ::tmux::parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
   Tcl_Eval(tcl_interp, "proc        :parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
+
+  Tcl_CreateCommand( tcl_interp, "::tmux::_output-divert", &tcl_outputdivert_proc,
+      (ClientData) 0, NULL ) ;
+  Tcl_CreateCommand( tcl_interp,        ":_output-divert", &tcl_outputdivert_proc,
+      (ClientData) 0, NULL ) ;
+
+  Tcl_Eval(tcl_interp, "proc output-of-txt {code} { :_output-divert start txt; uplevel $code; return [:_output-divert end]; }");
+  Tcl_Eval(tcl_interp, "proc output-of-list {code} { :_output-divert start list; uplevel $code; return [:_output-divert end]; }");
 
   log_debug("tcl init ok");
   return;
