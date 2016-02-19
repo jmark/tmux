@@ -649,6 +649,8 @@ void tcl_init(int argc, char **argv)
   Tcl_Eval(tcl_interp, "proc read_file {fname} { set fd [open $fname r]; set ret [read $fd]; close $fd; return $ret; }");
   Tcl_Eval(tcl_interp, "proc write_file {fname, txt} { set fd [open $fname w]; put -nonewline $fd $txt; close $fd; }");
 
+  Tcl_Eval(tcl_interp, "proc shell-quote {s} { return \"'[string map {' '\"'\"' \\\\ \\\\\\\\} $s]'\" }");
+
   tcl_create_command_and_aliases(tcl_interp, "format", &tcl_format_proc,
       (ClientData) 0, NULL ) ;
   tcl_create_command_and_aliases(tcl_interp, "f", &tcl_format_proc,
