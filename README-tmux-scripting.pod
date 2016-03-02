@@ -1,0 +1,282 @@
+#!env perldoc
+
+=for comment
+This is the source for the other README-tmux-scripting.*
+ $ perldoc -o nroff README-tmux-scripting.pod > tmux-tcl.1
+
+=for comment
+This document is in Pod format.
+To read this, use a Pod formatter, like "perldoc perlpod", e.g.
+ # Read on terminal screen:
+ $ perldoc README-tmux-scripting.pod
+ # Generate HTML:
+ $ perldoc -o html README-tmux-scripting.pod
+ # Generate manpage:
+ $ perldoc -o nroff README-tmux-scripting.pod
+
+=head1 NAME
+
+tmux with sensible scripting
+
+=head1 SYNOPSIS
+
+In tmux...
+
+  # Mark the current word in copy mode
+  :bind-key -t vi-copy M-Enter tcl {send-keys "B E"}
+
+  # Open selection in vim in mini-window
+  :bind-key -t vi-copy Y tcl {
+    split-window -c [f #{pane_current_path}] -l 5 "
+		echo -n [shell-quote [copy-mode-selection]] | vim -R -"
+  }
+
+=head1 DESCRIPTION
+
+This version of tmux has TCL as its config-and-command language.
+
+The choice of the language to use was simple:
+(A) TCL is easily embeddable and
+(B) the syntax is similar to the those of tmux (and bash)
+
+In most cases all your old configs and commands will work as they are.
+
+The intention was to smooth over the pain of scripting attempts
+in tmux and bring the experience to that of vim/emacs as close as possible.
+The ultimate goal was to make everything accessible in script.
+
+=head1 TMUX MODE EXTENSIONS
+
+The changes against the original tmux are:
+
+=over
+
+=item *
+
+New command B<C<tcl>> and alias B<C<t>> in all modes
+
+From now on, just use C<tcl [command]> to script in TCL.
+
+If there's a value returned from script/function, it will be displayed
+on screen and in message area (^B ~).
+
+=item *
+
+Global option B<C<tcl>>
+
+Numeric (boolean) option to control the mode of command prompt within tmux.
+If this evaluates to true (non-zero), the command prompt will accept
+tcl commands directly.
+
+=item *
+
+Global option B<C<have_tcl>>
+
+Numeric (boolean) flag that would tell you that TCL is present
+in this version of tmux.
+
+To execute additional TCL commands in a compatible way,
+add the following to your F<.tmux.conf>:
+
+  if-shell -F "#{have_tcl}" "tcl source ~/.tmux.tcl"
+
+Done so, your config will work with both standard and scriptable versions of tmux.
+
+=back
+
+=head1 TCL MODE
+
+=over
+
+=item *
+
+TCL script has all tmux commands directly accessible in three ways:
+
+1. in namespace B<C<::tmux>>
+
+2. as global commands
+
+3. as global commands prefixed with B<C<:>>
+
+For example, the existing tmux command C<list-keys> has three forms in tcl:
+C<list-keys>, C<:list-keys> and C<::tmux::list-keys>.
+
+Some of tmux commands/aliases use common or built-in TCL command names,
+such as C<if>, C<rename>, C<info>, C<set>, C<source>, C<format>.
+These commands are not added to the global namespace but are
+easily accessible with C<:> prefix and under C<::tmux> namespace.
+
+The full list of tmux commands can be found in L<tmux(1)> manual.
+
+=item *
+
+B<C<format>>, B<C<f>>, B<C<format-time>>, B<C<ft>> - get options; format string according to tmux # rules
+
+These functions are useful to query settings and options.
+
+B<C<format-time>> and B<C<ft>> will first call C<strftime> on their argument.
+
+B<C<format>> and B<C<f>> just use internal formatting routine.
+
+  :f #{pane_current_path}
+
+=item *
+
+B<C<parse>>, B<C<parse2script>>, B<C<parse2eval>>, B<C<parse_exec>> -
+parse and convert tmux config-or-command to TCL in various ways:
+
+=over
+
+=item B<C<parse [text]>>
+
+return as list of TCL commands (for C<::tmux> namespace)
+
+=item B<C<parse2script [text]>>
+
+return as equivalent TCL script (for C<::tmux> namespace)
+
+=item B<C<parse2eval [text]>>
+
+return as C<eval>able script for global/any namespace
+
+=item B<C<parse_exec [text]>>
+
+parse and execute as TCL
+
+=back
+
+=item *
+
+B<C<output-of-txt>>, B<C<output-of-list>> - capture the output of a command
+
+Since tmux never wanted to do scripting by itself, the most commands that
+return data do it as text output.
+
+To be able to deal with it in a programming language, one needs to intercept
+the output and put it into a variable or function argument.
+
+These functions temporarily divert the output while the code block executes
+and return the catch:
+
+  # put command line in TCL mode
+  :set tcl
+  # list keys in the usual way
+  :list-keys -t vi-copy
+  # return output as a single string
+  :output-of-txt { list-keys -t vi-copy }
+  # return output as list of strings
+  :output-of-list { list-keys -t vi-copy }
+
+=item *
+
+B<C<pbcopy>>,
+B<C<pbpaste>>,
+B<C<pbcontent>>,
+B<C<pblist>> - clipboard functions:
+
+=over
+
+=item B<C<pbcopy [string]>>
+
+push the string into clipboard buffers
+
+=item B<C<pbpaste>>
+
+not implemented, almost equivalent to S<B<C<:send-keys [pbcontent]>>>
+
+=item B<C<pbcontent>>
+
+return content of the topmost clipboard buffer
+
+=item B<C<pblist>>
+
+return the list of all clipboard buffers
+
+=back
+
+=item *
+
+B<C<copy-mode-selection>> - current selection in copy mode
+
+=item *
+
+B<C<print [string]>> - output message
+
+Prints message to the messages pane (^B ~).
+
+=item *
+
+B<C<nop [args ...]>> - consume all arguments, do nothing, return nothing
+
+Could be useful to eat up all arguments.
+
+=back
+
+Other helper functions:
+
+=over
+
+=item *
+
+B<C<tmux [code]>> - execute code in C<::tmux> namespace
+
+Almost the same as C<namespace eval ::tmux [code]>.
+
+Intended for easier transition from tmux legacy scripts.
+
+=item *
+
+B<C<read_file>>, B<C<write_file>> - read and write the whole file
+
+=item *
+
+B<C<shell-quote [string]>> - quote string to safely pass to shell
+
+=back
+
+=head1 Why
+
+L<tmux(1)> is a pretty cool terminal multiplexor with unique features.
+
+However, one of its key principles looks arguable to me.
+This work is done to address the "use shell for scripting" one.
+
+The author's rationale behind this decision was:
+(A) freedom from extra dependencies
+and (B) avoid inventing and implementing "yet another" tool language.
+
+Unfortunately, they failed at both:
+tmux B<has> its defective 'small config-and-command language';
+B<and> it depends on the user's shell which limits tmux scripts compatibility to the same shell's users.
+
+Needless to say, the I<config-and-command tmux small language> is not turing-complete,
+it has weird symantics, its parsing and behavior differs by 'mode', context and moon phase.
+To make any meaningful action, you'd probably need to spawn a shell
+and send the command from outside back to your tmux in which case you risk
+to fall down into quote hell.
+
+Even having this limited language, you might find that not all of the features
+are available right when you need it (and L<never gonna fix it|https://github.com/tmux/tmux/issues/310>).
+
+That's why you want it to get fixed.
+
+TCL is suitable both as immediate command language at prompt and
+as a common programming language.
+
+=head1 SEE ALSO
+
+L<tmux(1)>, L<tcl(3tcl)>, L<tclsh(1)>
+
+L<tmux homepage|http://tmux.github.io/>
+
+tmux L<README|https://github.com/ershov/tmux/blob/master/README>
+
+L<tcl tutorial|http://tcl.tk/man/tcl8.5/tutorial/tcltutorial.html>
+
+L<tcl documentation site|http://tcl.tk/doc/>
+
+=head1 AUTHOR
+
+Yury Ershov L<mailto:yuriy.ershov@gmail.com>
+
+=cut
