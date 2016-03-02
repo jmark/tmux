@@ -51,7 +51,6 @@ struct tmuxproc;
 
 /* Default global configuration file. */
 #define TMUX_CONF "/etc/tmux.conf"
-#define TCMUX_CONF "/etc/tcmux.conf"
 
 /*
  * Minimum layout cell size, NOT including separator line. The scroll region

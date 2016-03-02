@@ -28,7 +28,6 @@
 #include "tmux.h"
 
 char		 *cfg_file;
-char		 *tcfg_file;
 struct cmd_q	 *cfg_cmd_q;
 int		  cfg_finished;
 int		  cfg_references;
@@ -67,8 +66,7 @@ start_cfg(void)
 	} else if (errno != ENOENT)
 		cfg_add_cause("%s: %s", TMUX_CONF, strerror(errno));
 
-	home = find_home();
-	if (cfg_file == NULL && home != NULL) {
+	if (cfg_file == NULL && (home = find_home()) != NULL) {
 		xasprintf(&cfg_file, "%s/.tmux.conf", home);
 		if (access(cfg_file, R_OK) != 0 && errno == ENOENT) {
 			free(cfg_file);
@@ -80,23 +78,6 @@ start_cfg(void)
 	free(cause);
 
 	cmdq_continue(cfg_cmd_q);
-
-	// load tcl configs
-	if (access(TCMUX_CONF, R_OK) == 0) {
-		tcl_load_config(TCMUX_CONF, cfg_cmd_q);
-	} else if (errno != ENOENT) {
-		cfg_add_cause("%s: %s", TMUX_CONF, strerror(errno));
-	}
-
-	if (tcfg_file == NULL && home != NULL) {
-		xasprintf(&tcfg_file, "%s/.tcmux.conf", home);
-		if (access(tcfg_file, R_OK) != 0 && errno == ENOENT) {
-			free(tcfg_file);
-			tcfg_file = NULL;
-		}
-	}
-	if (tcfg_file)
-		tcl_load_config(tcfg_file, cfg_cmd_q);
 }
 
 int
