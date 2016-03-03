@@ -22,13 +22,19 @@ tmux with sensible scripting
 
 In tmux...
 
-  # Mark the current word in copy mode
+  # Mark the current word in vi-copy mode
   :bind-key -t vi-copy M-Enter tcl {send-keys "B E"}
 
   # Open selection in vim in mini-window
   :bind-key -t vi-copy Y tcl {
     split-window -c [f #{pane_current_path}] -l 5 "
 		echo -n [shell-quote [copy-mode-selection]] | vim -R -"
+  }
+
+  # Open selection in emacs in mini-window
+  :bind-key -t emacs-copy Y tcl {
+	split-window -c [f #{pane_current_path}] -l 5 "
+		emacs --insert <(echo -n [shell-quote [copy-mode-selection]])"
   }
 
 =head1 DESCRIPTION
