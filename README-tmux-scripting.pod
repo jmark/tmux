@@ -23,7 +23,13 @@ tmux with sensible scripting
 In tmux...
 
   # Mark the current word in vi-copy mode
-  :bind-key -t vi-copy M-Enter tcl {send-keys "B E"}
+  bind-key -t vi-copy M-Enter tcl {
+    # mark the current word in copy-mode
+    clear-selection
+    previous-space
+    begin-selection
+    next-space-end
+  }
 
   # Open selection in vim in mini-window
   :bind-key -t vi-copy Y tcl {
@@ -51,7 +57,11 @@ The intention was to smooth over the pain of scripting attempts
 in tmux and bring the experience to that of vim/emacs as close as possible.
 The ultimate goal was to make everything accessible in script.
 
-=head1 TMUX MODE EXTENSIONS
+TCL extension leaves tmux fully compatible with TCL-less one.
+There's only a new tmux command to execute TCL and all old tmux
+commands are transparently usable from TCL.
+
+=head1 TMUX EXTENSIONS
 
 The changes against the original tmux are:
 
@@ -92,6 +102,14 @@ Done so, your config will work with both standard and scriptable versions of tmu
 
 =head1 TCL MODE
 
+This section presumes tmux is in TCL command mode.
+
+To switch to it, execute this command in tmux or add it to config:
+
+  set tcl 1
+
+=head2 tmux commands access from TCL
+
 =over
 
 =item *
@@ -113,6 +131,65 @@ These commands are not added to the global namespace but are
 easily accessible with C<:> prefix and under C<::tmux> namespace.
 
 The full list of tmux commands can be found in L<tmux(1)> manual.
+
+or (better) way to do it in TCL mode:
+
+  print {*}[info commands ::tmux::*]
+
+=item *
+
+"mode" commands are generally not accessible and not scriptable in tmux.
+In TCL mode, all of them are first-class commands and can be used as any
+other command.
+
+In TCL, "mode" commands are accessible in various ways:
+
+=over
+
+=item B<C<::tmux::mode:MODENAME::COMMAND>>
+
+where MODENAME is C<copy> or C<choice>.
+
+The commands in each mode are implemented on their own in tmux.
+The commands that happen to have the same name internally coded to do
+different things in modes.
+This is why TCL has to ensure the current mode is meant for this command.
+
+This form of "mode" command the safest and preferable.
+
+=item B<C<::tmux::mode::COMMAND>>, B<C<::tmux::COMMAND>>, global B<C<COMMAND>>
+
+These forms of "mode" commands try to auto-detect the current pane mode
+and issue the correct "mode" command.
+
+In a particular mode not all of the commands will actually work because
+these namespaces contain the commands for all modes.
+
+This form is short and convenient to use but to make sure the command
+is good for the current mode, check C<::tmux::mode:MODENAME::> namespace first.
+
+Some of 'short' commands can be confusing.
+
+For example, there is no command C<up> in copy-mode but there is C<cursor-up> one.
+
+If there's a name clash,
+"mode" command will yield to the existing one.
+But that can always be found under C<::tmux::mode::*> namespace.
+
+=back
+
+The full list of "mode" commands:
+
+  print {*}[info commands ::tmux::mode::copy::*] ; # copy mode cmds
+  print {*}[info commands ::tmux::mode::choice::*] ; # choice mode cmds
+
+TODO: support 'edit' mode, too.
+
+=back
+
+=head2 Convenience TCL commands
+
+=over
 
 =item *
 

@@ -603,7 +603,13 @@ enum mode_key_cmd
 mode_key_lookup(struct mode_key_data *mdata, key_code key, const char **arg)
 {
 	struct mode_key_binding	*mbind, mtmp;
+	enum mode_key_cmd cmd;
 
+	if ((key & KEYC_DISMASK) == KEYC_DISPATCH) {
+		cmd = key & ~KEYC_DISMASK;
+		arg = NULL; // don't ever want to pass any args
+	} else {
+	// the original code {
 	mtmp.key = key;
 	mtmp.mode = mdata->mode;
 	if ((mbind = RB_FIND(mode_key_tree, mdata->tree, &mtmp)) == NULL) {
@@ -611,8 +617,11 @@ mode_key_lookup(struct mode_key_data *mdata, key_code key, const char **arg)
 			return (MODEKEY_NONE);
 		return (MODEKEY_OTHER);
 	}
+	// } // end of original code
+	cmd = mbind->cmd;
+	}
 
-	switch (mbind->cmd) {
+	switch (cmd) {
 	case MODEKEYEDIT_SWITCHMODE:
 	case MODEKEYEDIT_SWITCHMODEAPPEND:
 	case MODEKEYEDIT_SWITCHMODEAPPENDLINE:
@@ -625,6 +634,6 @@ mode_key_lookup(struct mode_key_data *mdata, key_code key, const char **arg)
 	default:
 		if (arg != NULL)
 			*arg = mbind->arg;
-		return (mbind->cmd);
+		return (cmd);
 	}
 }

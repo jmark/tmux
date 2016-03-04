@@ -86,14 +86,18 @@ struct tmuxproc;
 #define BELL_OTHER 3
 
 /* Special key codes. */
-#define KEYC_NONE 0xffff00000000ULL
-#define KEYC_UNKNOWN 0xfffe00000000ULL
-#define KEYC_BASE 0x100000000000ULL
+#define KEYC_NONE       0xffff00000000ULL
+#define KEYC_UNKNOWN    0xfffe00000000ULL
+#define KEYC_BASE       0x100000000000ULL
+
+/* Direct command dispatch via key code */
+#define KEYC_DISPATCH   0x00fefefe0000ULL
+#define KEYC_DISMASK    0x00ffffff0000ULL
 
 /* Key modifier bits. */
-#define KEYC_ESCAPE 0x200000000000ULL
-#define KEYC_CTRL   0x400000000000ULL
-#define KEYC_SHIFT  0x800000000000ULL
+#define KEYC_ESCAPE     0x200000000000ULL
+#define KEYC_CTRL       0x400000000000ULL
+#define KEYC_SHIFT      0x800000000000ULL
 
 /* Mask to obtain key w/o modifiers. */
 #define KEYC_MASK_MOD (KEYC_ESCAPE|KEYC_CTRL|KEYC_SHIFT)

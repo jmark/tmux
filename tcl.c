@@ -6,6 +6,8 @@
 
 #include "tmux.h"
 
+#include <assert.h>
+
 enum cmd_retval cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq);
 
 const struct cmd_entry cmd_tcl_entry /* avoid auto-create cmd for this */
@@ -234,6 +236,13 @@ int tcl2tmux_call2(
 void tcl_error(const char * str)
 {
     cmdq_error(global.cmdq, "%s", str);
+    Tcl_AddErrorInfo(tcl_interp, str);
+    Tcl_SetErrorCode(tcl_interp, str, NULL);
+    Tcl_SetResult(tcl_interp, str, NULL);
+}
+
+void tcl_error_q(const char * str)
+{
     Tcl_AddErrorInfo(tcl_interp, str);
     Tcl_SetErrorCode(tcl_interp, str, NULL);
     Tcl_SetResult(tcl_interp, str, NULL);
@@ -585,6 +594,237 @@ int tcl_nop_proc(
 }
 
 
+
+extern const struct mode_key_cmdstr mode_key_cmdstr_copy[];
+extern const struct mode_key_cmdstr mode_key_cmdstr_choice[];
+extern const struct mode_key_cmdstr mode_key_cmdstr_edit[];
+typedef void mode_key_handle_t(struct window_pane *, struct client *, struct session *, key_code, struct mouse_event *);
+void window_copy_key(struct window_pane *wp, struct client *c, struct session *sess, key_code key, struct mouse_event *m);
+void window_choose_key(struct window_pane *wp, struct client *c, struct session *sess, key_code key, struct mouse_event *m);
+
+static const char MODENAME_CHOICE[] = {"choice"};
+static const char MODENAME_COPY[] = {"copy"};
+struct mode_command_decr {
+  char *modeName;
+  mode_key_handle_t *mode_key_fn;
+  enum mode_key_cmd cmd;
+  const char * cmd_name;
+};
+
+int tcl_modecmd_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  struct mode_command_decr *mcd = (struct mode_command_decr*)clientData;
+
+  struct client         *c;
+  struct session        *s;
+  struct window         *w;
+  struct window_pane    *wp;
+
+  enum mode_key_cmd cmd = MODEKEY_NONE;
+
+  c = global.cmdq->client;
+  s = c->session;
+  if (s == NULL || (c->flags & (CLIENT_DEAD|CLIENT_SUSPENDED)) != 0) {
+    tcl_error_q("mode command: no session or dead/suspended");
+    return TCL_ERROR;
+  }
+  w = s->curw->window;
+  wp = w->active;
+
+  if (wp->screen == &wp->base) {
+    tcl_error_q("mode command: pane not in 'mode'");
+    return TCL_ERROR;
+  }
+
+  if (mcd->modeName) {
+    /* known mode: ensure the mode */
+    if (!strcmp(mcd->modeName, MODENAME_CHOICE)) {
+      if (wp->mode != &window_choose_mode) {
+        tcl_error_q("choose mode command: mode is not 'choose'");
+        return TCL_ERROR;
+      }
+      if (wp->mode->key != window_choose_key) {
+        tcl_error_q("choose mode command: mode is 'choose' but key handler is weird");
+        return TCL_ERROR;
+      }
+
+      cmd = mcd->cmd;
+    } else if (!strcmp(mcd->modeName, MODENAME_COPY)) {
+      if (wp->mode != &window_copy_mode) {
+        tcl_error_q("copy mode command: mode is not 'copy'");
+        return TCL_ERROR;
+      }
+      if (wp->mode->key != window_copy_key) {
+        tcl_error_q("copy mode command: mode is 'copy' but key handler is weird");
+        return TCL_ERROR;
+      }
+
+      cmd = mcd->cmd;
+    } else {
+      tcl_error_q("mode command: unknown mode");
+      return TCL_ERROR;
+    }
+  } else {
+    /* auto-detect mode */
+    struct mode_key_cmdstr *cmdstr;
+    if (wp->mode == &window_choose_mode) {
+      if (wp->mode->key != window_choose_key) {
+        tcl_error_q("auto mode command: mode is 'choose' but key handler is weird");
+        return TCL_ERROR;
+      }
+      cmdstr = mode_key_cmdstr_choice;
+    } else if (wp->mode == &window_copy_mode) {
+      if (wp->mode->key != window_copy_key) {
+        tcl_error_q("auto mode command: mode is 'copy' but key handler is weird");
+        return TCL_ERROR;
+      }
+      cmdstr = mode_key_cmdstr_copy;
+    } else {
+      tcl_error_q("auto mode command: unknown mode");
+      return TCL_ERROR;
+    }
+    cmd = mode_key_fromstring(cmdstr, mcd->cmd_name);
+  }
+
+  struct mouse_event me = {};
+  wp->mode->key(wp, c, s, cmd | KEYC_DISPATCH, &me);
+
+  return TCL_OK;
+
+
+  // execute 'mode' command(s):
+  // mode [MODE = edit|choice|copy] [COMMAND ...]
+  // e.g.
+  //   mode copy {cancel previous-space begin-selection next-space-end}
+  // Note that some commands lead to mode switch -- like goto-line -> edit
+
+
+  // TODO::
+  // 1. Import 'mode' commands in mode-key.c into their respective namespaces:
+  //    ::tmux::mode::copy::cancel
+  //    The command would check the pane is in THIS mode.
+  // 2. Import commands with automatic mode detect/dispatch:
+  //    ::tmux::mode::cancel would send 'cancel' to the current mode via mode_key_fromstring
+  // 3. Import commands that don't conflict with the existing ones to ::tmux
+  // 4. Import commands that don't conflict with the existing ones to :*
+  // 5. Import commands that don't conflict with the existing ones to global
+
+  // mode::copy::{set|get}-input - get/set 'mode' user input: data->inputstr, see window-copy.c
+  // function to get/set data->numprefix for the 'mode' command
+
+
+  // don't call window_copy_key directly
+  // try to use the current pane's mode structures
+  // to look up the string->commandId
+  // and wp->mode->key to dispatch the command
+}
+
+// TODO:: function to operate with screen buffer: read and write
+
+// TODO:: functions to set/get 'current' objects to operate on:
+//  Client
+//  Session
+//  Window
+//  Pane
+// ( see cmd_prepare_state* and cmd_find_* )
+// see server_client_handle_key():
+//  client -> session :
+//      c->session
+//  session -> window :
+//	if (s == NULL || (c->flags & (CLIENT_DEAD|CLIENT_SUSPENDED)) != 0)
+//		return;
+//	w = s->curw->window;
+//  window -> windowpane:
+//      wp = w->active;
+
+// TODO:: in command prompt accept multi-line tcl commands: cmd-command-prompt.c
+
+
+void /*Tcl_Command*/ tcl_create_command_override(Tcl_Interp *interp,
+				const char *cmdName, Tcl_CmdProc *proc,
+				ClientData clientData,
+				Tcl_CmdDeleteProc *deleteProc)
+{
+  Tcl_Command tcl_cmd = Tcl_CreateCommand(tcl_interp, cmdName, proc, clientData, deleteProc);
+  log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
+  //return tcl_cmd;
+}
+
+void /*Tcl_Command*/ tcl_create_command_nooverride(Tcl_Interp *interp,
+				const char *cmdName, Tcl_CmdProc *proc,
+				ClientData clientData,
+				Tcl_CmdDeleteProc *deleteProc)
+{
+  Tcl_CmdInfo cmdInfo;
+  if (!Tcl_GetCommandInfo(interp, cmdName, &cmdInfo)) {
+    Tcl_Command tcl_cmd = Tcl_CreateCommand(interp, cmdName, proc, clientData, deleteProc);
+    log_debug("Tcl_CreateCommand %s = %p", cmdName, tcl_cmd);
+    //return tcl_cmd;
+  } else {
+    log_debug("Tcl_CreateCommand %s not created due to name clash!", cmdName);
+    //return NULL;
+  }
+}
+
+void tcl_create_mode_command(char *modeName, mode_key_handle_t mode_key_fn, enum mode_key_cmd cmd, const char * cmd_name)
+{
+  struct mode_command_decr * mcd;
+  char cmdName2[100];
+
+  // create ::tmux::command
+  mcd = xcalloc(1, sizeof(*mcd));
+  mcd->modeName = modeName;
+  mcd->mode_key_fn = mode_key_fn;
+  mcd->cmd = cmd;
+  mcd->cmd_name = cmd_name;
+
+  snprintf(cmdName2, 100, "::tmux::mode::%s::%s", modeName, cmd_name);
+  tcl_create_command_override(tcl_interp, cmdName2, tcl_modecmd_proc, (ClientData)mcd, NULL);
+
+  // create auto mode commands
+  mcd = xcalloc(1, sizeof(*mcd));
+  mcd->modeName = NULL;
+  mcd->mode_key_fn = NULL;
+  mcd->cmd = 0;
+  mcd->cmd_name = cmd_name;
+
+  snprintf(cmdName2, 100, "::tmux::mode::%s", cmd_name);
+  tcl_create_command_override(tcl_interp, cmdName2, tcl_modecmd_proc, (ClientData)mcd, NULL);
+
+  snprintf(cmdName2, 100, "::tmux::%s", cmd_name);
+  tcl_create_command_nooverride(tcl_interp, cmdName2, tcl_modecmd_proc, (ClientData)mcd, NULL);
+
+  snprintf(cmdName2, 100, "%s", cmd_name);
+  tcl_create_command_nooverride(tcl_interp, cmdName2, tcl_modecmd_proc, (ClientData)mcd, NULL);
+}
+
+void tcl_create_mode_commands()
+{
+  struct {
+    char * n;
+    struct mode_key_cmdstr *m;
+    mode_key_handle_t *key1;
+    mode_key_handle_t *key2;
+  } modes[] = {
+//    {"edit",   mode_key_cmdstr_edit   },  // defined by c->prompt_string != NULL, see server_client_handle_key()
+    {MODENAME_CHOICE, mode_key_cmdstr_choice, window_choose_mode.key, &window_choose_key },
+    {MODENAME_COPY,   mode_key_cmdstr_copy,   window_copy_mode.key,   &window_copy_key   },
+  }, *mode;
+
+  mode = modes;
+  for (size_t i = 0; i < sizeof(modes)/sizeof(*modes); mode++,i++) {
+    assert(mode->key1 == mode->key2); // ?
+    for (struct mode_key_cmdstr *mode_cmds = mode->m; mode_cmds->name; mode_cmds++) {
+      tcl_create_mode_command(mode->n, mode->key1, mode_cmds->cmd, mode_cmds->name);
+    }
+  }
+}
+
+
 void tcl_create_command_and_aliases(
     Tcl_Interp *interp,
     const char *cmdName1, Tcl_CmdProc *proc,
@@ -612,6 +852,9 @@ void tcl_create_command_and_aliases(
     log_debug("Tcl_CreateCommand %s -> %s not created due to name clash!", cmdName1, cmdName2+6);
   }
 }
+
+// TODO: send-keys-global -> server_client_handle_key(...)
+
 
 void tcl_init(int argc, char **argv)
 {
@@ -691,6 +934,8 @@ void tcl_init(int argc, char **argv)
 
   tcl_create_command_and_aliases(tcl_interp, "nop", &tcl_nop_proc,
       (ClientData) 0, NULL ) ;
+
+  tcl_create_mode_commands();
 
   log_debug("tcl init ok");
   return;
