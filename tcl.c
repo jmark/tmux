@@ -48,38 +48,20 @@ const char stacktrace[] = ""
 "}\n"
 ;
 
-//int impl_command1(
-//    ClientData clientData,
-//    Tcl_Interp *interp,
-//    int objc,
-//    Tcl_Obj * const * objv)
-//{
-//  printf("tcl call: cmd1\n");
-//  // Tcl_SetObjResult(interp, obj)
-//  Tcl_Eval(tcl_interp, "puts qwe");
-//  Tcl_Eval(tcl_interp, stacktrace);
-//  Tcl_Eval(tcl_interp, "puts [stacktrace]");
-//  Tcl_Eval(tcl_interp, "puts asd");
-//  return TCL_OK;
-//}
-
-struct tcl_global {
+struct tcl_global_context;
+struct tcl_global_context {
   struct cmd_q *cmdq;
 
-  struct window_pane *wp;
-  struct client *c;
-  struct session *s;
-  struct winlink *wl;
+  struct client         *c;
+  struct session        *s;
+  struct window         *w;
+  struct window_pane    *wp;
+  struct winlink        *wl;
 
-  enum cmd_retval cmd_retval;
-} global = {
-  .cmdq = NULL,
-  .wp = NULL,
-  .c = NULL,
-  .s = NULL,
-  .wl = NULL,
-  .cmd_retval = CMD_RETURN_NORMAL
-};
+  enum cmd_retval cmd_retval; /* = CMD_RETURN_NORMAL */
+
+  struct tcl_global_context * prev;
+} *tcl_g = NULL;
 
 extern const struct cmd_entry cmd_attach_session_entry;
 
@@ -94,58 +76,142 @@ extern const struct cmd_entry cmd_attach_session_entry;
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wunused-label"
 
-void set_global_cmdq(struct cmd_q *cmdq)
+//void set_global_cmdq(struct cmd_q *cmdq)
+//{
+//  if (global.cmdq == cmdq) return;
+//  if (global.cmdq) cmdq_free(global.cmdq);
+//  global.cmdq = cmdq;
+//  if (global.cmdq) global.cmdq->references++;
+//}
+
+void release_global(struct tcl_global_context *g)
 {
-  if (global.cmdq == cmdq) return;
-  if (global.cmdq) cmdq_free(global.cmdq);
-  global.cmdq = cmdq;
-  if (global.cmdq) global.cmdq->references++;
+  /* Just in case, do it in reverse order */
+
+  /* no refcount for window_pane */
+  if (g->w)     window_remove_ref(g->w);
+  /* no refcount for winlink */
+  if (g->s)     session_unref(g->s);
+  if (g->c)     server_client_unref(g->c);
+  if (g->cmdq)  cmdq_free(g->cmdq);
 }
 
-/*
-int setglobal_from_cmdq(struct cmd_q *cmdq)
+void release_reset_global(struct tcl_global_context *g)
 {
-  set_global_cmdq(cmdq);
+  release_global(g);
+  memset(g, 0, sizeof(*g));
+}
 
-  struct cmd cmd;
-  memset(&cmd, 0, sizeof(cmd));
+void addref_global(struct tcl_global_context *g)
+{
+  /* no refcount for window_pane */
+  if (g->w)     g->w->references++;
+  /* no refcount for winlink */
+  if (g->s)     g->s->references++;
+  if (g->c)     g->c->references++;
+  if (g->cmdq)  g->cmdq->references++;
+}
 
-  cmd.entry = &cmd_attach_session_entry;
-  char *aa[] = {"", NULL};
-  cmd.args = args_parse(cmd.entry->args.template, 1, aa);
+/* supply values or fill in from cmdq -> client -> session -> all */
+void fill_global(struct tcl_global_context *g,
+  struct cmd_q          *cmdq,
+  struct client         *c,
+  struct session        *s,
+  struct window         *w,
+  struct window_pane    *wp,
+  struct winlink        *wl)
+{
+  g->cmdq = cmdq;
+  g->c = c;
+  g->s = s;
+  g->wl = wl;
+  g->w = w;
+  g->wp = wp;
 
-  if (cmd_prepare_state(&cmd, global.cmdq, NULL) != 0) {
-    args_free(cmd.args);
-    return 0;
+  /* cmdq -> client */
+  if (!g->c && cmdq) g->c = cmdq->client;
+  /* client -> session */
+  if (!g->s && g->c) g->s = g->c->session;
+  if (g->s && g->c && (g->c->flags & (CLIENT_DEAD|CLIENT_SUSPENDED)) == 0) {
+    if (g->s->curw) {
+      /* session -> winlink */
+      if (!g->wl) g->wl = g->s->curw;
+      /* winlink -> window */
+      if (!g->w) g->w = g->s->curw->window;
+    }
   }
-
-  global.s = global.cmdq->state.tflag.s;
-  global.c = global.cmdq->client;
-  global.wl = global.cmdq->state.tflag.wl;
-  global.wp = global.cmdq->state.tflag.wp;
-
-  args_free(cmd.args);
-  return 1;
+  /* window -> window_pane */
+  if (!g->wp && g->w) g->wp = g->w->active;
 }
 
-int setglobal_from_all(struct client *c, struct session *s,
-    struct winlink *wl, struct window_pane *wp)
+/* fill in global state from client */
+void fill_global_from_client(struct tcl_global_context *g, struct client *c)
 {
-  // from format_defaults
-  if (s == NULL && c != NULL)
-    s = c->session;
-  if (wl == NULL && s != NULL)
-    wl = s->curw;
-  if (wp == NULL && wl != NULL)
-    wp = wl->window->active;
-
-  set_global_cmdq(NULL);
-  global.wp = wp;
-  global.c = c;
-  global.s = s;
-  global.wl = wl;
+  g->c = c;
+  if (c == NULL) return;
+  g->s = c->session;
+  if (g->s == NULL || (g->c->flags & (CLIENT_DEAD|CLIENT_SUSPENDED)) != 0) return;
+  if (g->s->curw) {
+    g->wl = g->s->curw;
+    g->w = g->s->curw->window;
+  }
+  if (!g->w) return;
+  g->wp = g->w->active;
 }
-*/
+
+/* fill in global state from cmdq */
+void fill_global_from_cmdq(struct tcl_global_context *g, struct cmd_q *cmdq)
+{
+  g->cmdq = cmdq;
+  if (cmdq) fill_global_from_client(g, cmdq->client);
+}
+
+void global_enter(
+  struct cmd_q          *cmdq,
+  struct client         *c,
+  struct session        *s,
+  struct window         *w,
+  struct window_pane    *wp,
+  struct winlink        *wl)
+{
+  struct tcl_global_context *g = xcalloc(1, sizeof(*g));
+  memset(g, 0, sizeof(*g));
+  fill_global(g, cmdq, c, s, w, wp, wl);
+  addref_global(g);
+  g->prev = tcl_g;
+  tcl_g = g;
+}
+
+void global_enter_q(struct cmd_q *cmdq)
+{
+  struct tcl_global_context *g = xcalloc(1, sizeof(*g));
+  memset(g, 0, sizeof(*g));
+  fill_global_from_cmdq(g, cmdq);
+  addref_global(g);
+  g->prev = tcl_g;
+  tcl_g = g;
+}
+
+void global_enter_c(struct client *c)
+{
+  struct tcl_global_context *g = xcalloc(1, sizeof(*g));
+  memset(g, 0, sizeof(*g));
+  fill_global_from_client(g, c);
+  addref_global(g);
+  g->prev = tcl_g;
+  tcl_g = g;
+}
+
+void global_leave()
+{
+  if (tcl_g == NULL) {
+    fatal("%s:%d: %s: internal error: tcl global state stack empty", __FILE__, __LINE__, __func__);
+  }
+  struct tcl_global_context *g = tcl_g;
+  tcl_g = g->prev;
+  release_global(g);
+  free(g);
+}
 
 int tcl2tmux_call1(
        ClientData clientData,
@@ -164,28 +230,28 @@ int tcl2tmux_call1(
       (c.entry->args.lower != -1 && c.args->argc < c.entry->args.lower) ||
       (c.entry->args.upper != -1 && c.args->argc > c.entry->args.upper))
   {
-    cmdq_error(global.cmdq, "tmux::usage: %s %s", c.entry->name, c.entry->usage);
+    cmdq_error(tcl_g->cmdq, "tmux::usage: %s %s", c.entry->name, c.entry->usage);
     Tcl_AddErrorInfo(tcl_interp, "tmux wrong number of args");
     Tcl_SetErrorCode(tcl_interp, "tmux wrong number of args", NULL);
     Tcl_SetResult(tcl_interp, "tmux wrong number of args", NULL);
-    global.cmd_retval = CMD_RETURN_ERROR;
+    tcl_g->cmd_retval = CMD_RETURN_ERROR;
     return TCL_ERROR;
   }
 
-  struct cmd *cmd_old = global.cmdq->cmd;
-  global.cmdq->cmd = &c;
+  struct cmd *cmd_old = tcl_g->cmdq->cmd;
+  tcl_g->cmdq->cmd = &c;
 
-  if (cmd_prepare_state(&c, global.cmdq, NULL) != 0) {
-    global.cmd_retval = CMD_RETURN_ERROR;
+  if (cmd_prepare_state(&c, tcl_g->cmdq, NULL) != 0) {
+    tcl_g->cmd_retval = CMD_RETURN_ERROR;
   } else {
-    global.cmd_retval = (*c.entry->exec)(&c, global.cmdq);
+    tcl_g->cmd_retval = (*c.entry->exec)(&c, tcl_g->cmdq);
   }
-  global.cmdq->cmd = cmd_old;
+  tcl_g->cmdq->cmd = cmd_old;
 
   args_free(c.args);
   //free(c.args);
 
-  return global.cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
+  return tcl_g->cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
 
 
@@ -195,7 +261,7 @@ int tcl2tmux_call2(
        int argc,
        const char **argv)
 {
-  global.cmd_retval = CMD_RETURN_NORMAL;
+  tcl_g->cmd_retval = CMD_RETURN_NORMAL;
 
   struct cmd *cmd = xcalloc(1, sizeof *cmd);
   cmd->entry = (struct cmd_entry *)clientData;
@@ -207,11 +273,11 @@ int tcl2tmux_call2(
       (cmd->entry->args.upper != -1 && cmd->args->argc > cmd->entry->args.upper))
   {
     free(cmd);
-    cmdq_error(global.cmdq, "tmux::usage: %s %s", cmd->entry->name, cmd->entry->usage);
+    cmdq_error(tcl_g->cmdq, "tmux::usage: %s %s", cmd->entry->name, cmd->entry->usage);
     Tcl_AddErrorInfo(tcl_interp, "tmux wrong number of args");
     Tcl_SetErrorCode(tcl_interp, "tmux wrong number of args", NULL);
     Tcl_SetResult(tcl_interp, "tmux wrong number of args", NULL);
-    global.cmd_retval = CMD_RETURN_ERROR;
+    tcl_g->cmd_retval = CMD_RETURN_ERROR;
     return TCL_ERROR;
   }
 
@@ -219,8 +285,8 @@ int tcl2tmux_call2(
   cmdlist->references = 1;
   TAILQ_INIT(&cmdlist->list);
 
-  struct cmd_q *cmdq = cmdq_new(global.cmdq->client);
-  cmdq->parent = global.cmdq;
+  struct cmd_q *cmdq = cmdq_new(tcl_g->cmdq->client);
+  cmdq->parent = tcl_g->cmdq;
 
   TAILQ_INSERT_TAIL(&cmdlist->list, cmd, qentry);
 
@@ -229,13 +295,13 @@ int tcl2tmux_call2(
   cmd_list_free(cmdlist);
   cmdq_free(cmdq);
 
-  return global.cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
+  return tcl_g->cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
 
 
 void tcl_error(const char * str)
 {
-    cmdq_error(global.cmdq, "%s", str);
+    cmdq_error(tcl_g->cmdq, "%s", str);
     Tcl_AddErrorInfo(tcl_interp, str);
     Tcl_SetErrorCode(tcl_interp, str, NULL);
     Tcl_SetResult(tcl_interp, str, NULL);
@@ -255,32 +321,32 @@ int tcl_format_proc(
        int argc,
        const char **argv)
 {
-  global.cmd_retval = CMD_RETURN_NORMAL;
+  tcl_g->cmd_retval = CMD_RETURN_NORMAL;
   if (argc != 2) {
     tcl_error("Usage: format string | format-time string");
-    global.cmd_retval = CMD_RETURN_ERROR;
+    tcl_g->cmd_retval = CMD_RETURN_ERROR;
     return TCL_ERROR;
   }
 
-  struct cmd cmd;
-  memset(&cmd, 0, sizeof(cmd));
+  //struct cmd cmd;
+  //memset(&cmd, 0, sizeof(cmd));
 
-  cmd.entry = &cmd_attach_session_entry;
-  char *aa[] = {"", NULL};
-  cmd.args = args_parse(cmd.entry->args.template, 1, aa);
+  //cmd.entry = &cmd_attach_session_entry;
+  //char *aa[] = {"", NULL};
+  //cmd.args = args_parse(cmd.entry->args.template, 1, aa);
 
-  if (cmd_prepare_state(&cmd, global.cmdq, NULL) != 0) {
-    tcl_error("format: prepare_state fail");
-    global.cmd_retval = CMD_RETURN_ERROR;
-  } else {
-    struct session	*s = global.cmdq->state.tflag.s;
-    struct client	*c = global.cmdq->client;
-    struct winlink	*wl = global.cmdq->state.tflag.wl;
-    struct window_pane	*wp = global.cmdq->state.tflag.wp;
+  //if (cmd_prepare_state(&cmd, tcl_g->cmdq, NULL) != 0) {
+  //  tcl_error("format: prepare_state fail");
+  //  tcl_g->cmd_retval = CMD_RETURN_ERROR;
+  //} else {
+    //struct session	*s = global.cmdq->state.tflag.s;
+    //struct client	*c = global.cmdq->client;
+    //struct winlink	*wl = global.cmdq->state.tflag.wl;
+    //struct window_pane	*wp = global.cmdq->state.tflag.wp;
     struct format_tree	*ft;
 
-    ft = format_create(global.cmdq, 0);
-    format_defaults(ft, c, s, wl, wp);
+    ft = format_create(tcl_g->cmdq, 0);
+    format_defaults(ft, tcl_g->c, tcl_g->s, tcl_g->wl, tcl_g->wp);
     char * str;
     if (clientData == 0) {
       str = format_expand(ft, argv[1]);
@@ -292,11 +358,11 @@ int tcl_format_proc(
 
     //free(str);
     format_free(ft);
-  }
+  //}
 
-  args_free(cmd.args);
+  //args_free(cmd.args);
 
-  return global.cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
+  return tcl_g->cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
 
 int tcl_tmuxparse_proc(
@@ -559,7 +625,7 @@ int tcl_copymodeselection_proc(
        int argc,
        const char **argv)
 {
-  struct window_pane *wp = global.wp;
+  struct window_pane *wp = tcl_g->wp;
   if (!wp || wp->mode != &window_copy_mode) {
     Tcl_SetResult(interp, "", NULL);
     return TCL_OK;
@@ -578,8 +644,9 @@ int tcl_print_proc(
        int argc,
        const char **argv)
 {
+  if (!tcl_g->cmdq) return TCL_OK;
   for (int i=1; i < argc; i++) {
-    cmdq_print(global.cmdq, "%s", argv[i]);
+    cmdq_print(tcl_g->cmdq, "%s", argv[i]);
   }
   return TCL_OK;
 }
@@ -619,21 +686,21 @@ int tcl_modecmd_proc(
 {
   struct mode_command_decr *mcd = (struct mode_command_decr*)clientData;
 
-  struct client         *c;
-  struct session        *s;
-  struct window         *w;
-  struct window_pane    *wp;
+  struct client         *c = tcl_g->c;
+  struct session        *s = tcl_g->s;
+  //struct window         *w = tcl_g->w;
+  struct window_pane    *wp = tcl_g->wp;
 
   enum mode_key_cmd cmd = MODEKEY_NONE;
 
-  c = global.cmdq->client;
-  s = c->session;
   if (s == NULL || (c->flags & (CLIENT_DEAD|CLIENT_SUSPENDED)) != 0) {
     tcl_error_q("mode command: no session or dead/suspended");
     return TCL_ERROR;
   }
-  w = s->curw->window;
-  wp = w->active;
+  if (!wp) {
+    tcl_error_q("mode command: no window pane");
+    return TCL_ERROR;
+  }
 
   if (wp->screen == &wp->base) {
     tcl_error_q("mode command: pane not in 'mode'");
@@ -741,7 +808,9 @@ int tcl_modecmd_proc(
 //  window -> windowpane:
 //      wp = w->active;
 
-// TODO:: in command prompt accept multi-line tcl commands: cmd-command-prompt.c
+// TODO:: in command prompt accept multi-line tcl commands: Tcl_CommandComplete cmd-command-prompt.c
+
+// TODO:: <Tab> expansion for tcl commands in tcl mode
 
 
 void /*Tcl_Command*/ tcl_create_command_override(Tcl_Interp *interp,
@@ -866,13 +935,10 @@ void tcl_init(int argc, char **argv)
   }
   // Tcl_InitStubs(interp, "8.*", 0) ?
 
-  //Tcl_CreateObjCommand( tcl_interp, "cmd1", &impl_command1,
-  //    (ClientData) NULL, NULL ) ;
+  // TODO:: Tcl_Finalize() at the end?
 
-  //Tcl_Eval(tcl_interp, "puts 1");
-  //Tcl_Eval(tcl_interp, "cmd1");
-
-  //Tcl_Finalize();
+  /* Global all-null context */
+  global_enter_q(NULL);
 
   for (const struct cmd_entry **pcmd_e = cmd_table; *pcmd_e; pcmd_e++) {
     const struct cmd_entry *cmd_e = *pcmd_e;
@@ -952,7 +1018,7 @@ cleanup:
     log_debug("tcl init..."); \
     tcl_init(0, NULL); \
     if (tcl_interp == NULL) { \
-      return global.cmd_retval = (ERROR_CODE); \
+      return tcl_g->cmd_retval = (ERROR_CODE); \
     } \
     log_debug("tcl init ok"); \
   } else {} \
@@ -1008,13 +1074,15 @@ int tcl_eval_args_in_namespace(Tcl_Interp *interp, const char *ns, int argc, cha
 enum cmd_retval
 cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
 {
+  TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
+
+  global_enter_q(cmdq);
+
   struct args		*args = self->args;
-  struct client		*c = cmdq->state.c;
+  //struct client		*c = cmdq->state.c;
   //struct session	*s = cmdq->state.tflag.s;
   //struct winlink	*wl = cmdq->state.tflag.wl;
   //struct window_pane	*wp = cmdq->state.tflag.wp;
-
-  set_global_cmdq(cmdq);
 
   //log_debug("%s:%d s=%p c=%p wl=%p wp=%p", __FILE__, __LINE__, s, c, wl, wp);
   log_debug("%s:%d args[%d]", __FILE__, __LINE__, args->argc);
@@ -1024,20 +1092,21 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
     log_debug(" tcl arg[%d]: <%s>", i, args->argv[i]);
   }
 
-  TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
-
   if (tcl_eval_args(tcl_interp, args->argc, args->argv) == TCL_ERROR) {
     log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
     cmdq_error(cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
+
+    global_leave();
     return CMD_RETURN_ERROR;
   }
 
   log_debug("tcl ok: \"%s\"", Tcl_GetStringResult(tcl_interp));
   if (*Tcl_GetStringResult(tcl_interp)) {
     cmdq_print(cmdq, "%s", Tcl_GetStringResult(tcl_interp));
-    status_message_set(c, "%s", Tcl_GetStringResult(tcl_interp));
+    status_message_set(tcl_g->c, "%s", Tcl_GetStringResult(tcl_interp));
   }
 
+  global_leave();
   return CMD_RETURN_NORMAL;
 }
 
@@ -1046,9 +1115,7 @@ int tcl_eval_client(const char *tcl_str,
 {
   TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
 
-  global.cmd_retval = CMD_RETURN_NORMAL;
-  global.s = session;
-  global.wp = wp;
+  global_enter(NULL, client, session, NULL, wp, NULL);
 
   struct cmd *cmd = xcalloc(1, sizeof *cmd);
   cmd->entry = &cmd_tcl_entry;
@@ -1062,9 +1129,7 @@ int tcl_eval_client(const char *tcl_str,
   free(cmd->file);
   free(cmd);
 
-  global.wp = NULL;
-  global.s = NULL;
-
+  global_leave();
   return ret;
 }
 
@@ -1072,7 +1137,7 @@ int tcl_eval_cmdq(const char *tcl_str, struct cmd_q *cmdq)
 {
   TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
 
-  global.cmd_retval = CMD_RETURN_NORMAL;
+  global_enter_q(cmdq);
 
   struct cmd *cmd = xcalloc(1, sizeof *cmd);
   cmd->entry = &cmd_tcl_entry;
@@ -1086,6 +1151,7 @@ int tcl_eval_cmdq(const char *tcl_str, struct cmd_q *cmdq)
   free(cmd->file);
   free(cmd);
 
+  global_leave();
   return ret;
 }
 
@@ -1094,12 +1160,12 @@ int tcl_load_config(const char *fname, struct cmd_q *cmdq)
   TCL_INTERP_CHECKINIT(CMD_RETURN_ERROR);
 
   int ret = 0;
-  set_global_cmdq(cmdq);
+  global_enter_q(cmdq);
   if (Tcl_EvalFile(tcl_interp, fname) == TCL_ERROR) {
     cfg_add_cause("%s: %s", fname, Tcl_GetStringResult(tcl_interp));
     ret = -1;
   }
-  set_global_cmdq(NULL);
+  global_leave();
 
   return ret;
 }

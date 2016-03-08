@@ -3,6 +3,7 @@
 =for comment
 This is the source for the other README-tmux-scripting.*
  $ perldoc -o nroff README-tmux-scripting.pod > tmux-tcl.1
+ $ perldoc -o html README-tmux-scripting.pod > tmux-tcl.html
 
 =for comment
 This document is in Pod format.
