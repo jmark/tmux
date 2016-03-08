@@ -890,7 +890,7 @@ const struct options_table_entry options_table[] = {
 	{ .name = "tcl",
 	  .type = OPTIONS_TABLE_FLAG,
 	  .scope = OPTIONS_TABLE_SERVER,
-	  .default_num = 0
+	  .default_num = 1
 	},
 
 	{ .name = "have_tcl",
