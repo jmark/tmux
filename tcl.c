@@ -812,6 +812,7 @@ int tcl_modecmd_proc(
 
 // TODO:: <Tab> expansion for tcl commands in tcl mode
 
+// TODO:: TCL interface to window-choose mode: choose from list; choose from list of [tag, val]
 
 void /*Tcl_Command*/ tcl_create_command_override(Tcl_Interp *interp,
 				const char *cmdName, Tcl_CmdProc *proc,
@@ -954,6 +955,12 @@ void tcl_init(int argc, char **argv)
   }
 
   Tcl_Eval(tcl_interp, "proc tmux {args} { namespace eval ::tmux {*}$args }");
+
+  /* prevent from adding these from other namespaces */
+  Tcl_Eval(tcl_interp, "interp alias {} tcl {} eval");
+  Tcl_Eval(tcl_interp, "interp alias {} t {} eval");
+  Tcl_Eval(tcl_interp, "interp alias {} :tcl {} eval");
+  Tcl_Eval(tcl_interp, "interp alias {} :t {} eval");
 
   Tcl_Eval(tcl_interp, "proc read_file {fname} { set fd [open $fname r]; set ret [read $fd]; close $fd; return $ret; }");
   Tcl_Eval(tcl_interp, "proc write_file {fname, txt} { set fd [open $fname w]; put -nonewline $fd $txt; close $fd; }");
