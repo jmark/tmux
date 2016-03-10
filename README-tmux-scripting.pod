@@ -290,9 +290,40 @@ Prints message to the messages pane (^B ~).
 
 =item *
 
-B<C<nop [args ...]>> - consume all arguments, do nothing, return nothing
+B<C<using context { script }>> - execute script in context of another client/session/window/pane
 
-Could be useful to eat up all arguments.
+Set default context for the commands in C<script>.
+
+C<context> is a sequence of:
+
+=over
+
+=item B<C<client {client-spec}>>
+
+=item B<C<session {session-spec}>>
+
+=item B<C<window {window-spec}>>
+
+=item B<C<pane {pane-spec}>>
+
+=back
+
+For the cpecifications, see L<tmux(1)> manual, keywords
+C<target-client>, C<target-session>, C<target-window>, C<target-pane>.
+
+B<NOTE> that this will not affect the original tmux commands:
+they will still require C<-t> (or whatever) flag to specify the target.
+
+B<Examples:>
+
+  print [f #{pane_current_path}]
+  print [using pane %1 {f #{pane_current_path}}]
+  print [using pane :.1 {f #{pane_current_path}}]
+  print [using window :1 {f #{pane_current_path}}]
+
+=item *
+
+B<C<nop [args ...]>> - consume all arguments, do nothing, return nothing
 
 =back
 
