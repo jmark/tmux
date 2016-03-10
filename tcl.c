@@ -1015,6 +1015,7 @@ void tcl_create_mode_commands()
 }
 
 
+// TODO:: make ':' and root versions of tmux commands via 'interp alias'
 void tcl_create_command_and_aliases(
     Tcl_Interp *interp,
     const char *cmdName1, Tcl_CmdProc *proc,
@@ -1087,48 +1088,46 @@ void tcl_init(int argc, char **argv)
 
   Tcl_Eval(tcl_interp, "proc shell-quote {s} { return \"'[string map {' '\"'\"' \\\\ \\\\\\\\} $s]'\" }");
 
-  tcl_create_command_and_aliases(tcl_interp, "format", &tcl_format_proc,
+  tcl_create_command_override(tcl_interp, "format", &tcl_format_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_and_aliases(tcl_interp, "f", &tcl_format_proc,
+  tcl_create_command_override(tcl_interp, "f", &tcl_format_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_and_aliases(tcl_interp, "format-time", &tcl_format_proc,
+  tcl_create_command_override(tcl_interp, "format-time", &tcl_format_proc,
       (ClientData) 1, NULL ) ;
-  tcl_create_command_and_aliases(tcl_interp, "ft", &tcl_format_proc,
+  tcl_create_command_override(tcl_interp, "ft", &tcl_format_proc,
       (ClientData) 1, NULL ) ;
 
-  tcl_create_command_and_aliases(tcl_interp, "parse", &tcl_tmuxparse_proc,
+  tcl_create_command_override(tcl_interp, "parse", &tcl_tmuxparse_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_and_aliases(tcl_interp, "parse2script", &tcl_tmuxparse_proc,
+  tcl_create_command_override(tcl_interp, "parse2script", &tcl_tmuxparse_proc,
       (ClientData) 1, NULL ) ;
   Tcl_Eval(tcl_interp, "proc         parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
-  Tcl_Eval(tcl_interp, "proc        :parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
   Tcl_Eval(tcl_interp, "proc         parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
-  Tcl_Eval(tcl_interp, "proc        :parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
 
-  tcl_create_command_and_aliases(tcl_interp, "_output-divert", &tcl_outputdivert_proc,
+  tcl_create_command_override(tcl_interp, "_output-divert", &tcl_outputdivert_proc,
       (ClientData) 0, NULL ) ;
   Tcl_Eval(tcl_interp, "proc output-of-txt {code} { :_output-divert start txt; uplevel $code; return [:_output-divert end]; }");
   Tcl_Eval(tcl_interp, "proc output-of-list {code} { :_output-divert start list; uplevel $code; return [:_output-divert end]; }");
 
-  tcl_create_command_and_aliases(tcl_interp, "pbcopy", &tcl_pbcopy_proc,
+  tcl_create_command_override(tcl_interp, "pbcopy", &tcl_pbcopy_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_and_aliases(tcl_interp, "pbpaste", &tcl_pbpaste_proc,
+  tcl_create_command_override(tcl_interp, "pbpaste", &tcl_pbpaste_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_and_aliases(tcl_interp, "pbcontent", &tcl_pbcontent_proc,
+  tcl_create_command_override(tcl_interp, "pbcontent", &tcl_pbcontent_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_and_aliases(tcl_interp, "pblist", &tcl_pblist_proc,
-      (ClientData) 0, NULL ) ;
-
-  tcl_create_command_and_aliases(tcl_interp, "copy-mode-selection", &tcl_copymodeselection_proc,
+  tcl_create_command_override(tcl_interp, "pblist", &tcl_pblist_proc,
       (ClientData) 0, NULL ) ;
 
-  tcl_create_command_and_aliases(tcl_interp, "print", &tcl_print_proc,
+  tcl_create_command_override(tcl_interp, "copy-mode-selection", &tcl_copymodeselection_proc,
       (ClientData) 0, NULL ) ;
 
-  tcl_create_command_and_aliases(tcl_interp, "nop", &tcl_nop_proc,
+  tcl_create_command_override(tcl_interp, "print", &tcl_print_proc,
       (ClientData) 0, NULL ) ;
 
-  tcl_create_command_and_aliases(tcl_interp, "using", &tcl_using_context_proc,
+  tcl_create_command_override(tcl_interp, "nop", &tcl_nop_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_override(tcl_interp, "using", &tcl_using_context_proc,
       (ClientData) 0, NULL ) ;
 
   tcl_create_mode_commands();
