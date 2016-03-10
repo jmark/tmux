@@ -661,6 +661,126 @@ int tcl_nop_proc(
 }
 
 
+static const char CTX_SESSION[] = {"session"};
+static const char CTX_CLIENT[] = {"client"};
+static const char CTX_WINDOW[] = {"window"};
+static const char CTX_PANE[] = {"pane"};
+
+#define SHIFT_TO_ARG(NAME)  \
+      if ((++argi) >= argc) { \
+        cmdq_error(tcl_g->cmdq, "using " NAME ": argument required"); \
+        Tcl_AddErrorInfo(tcl_interp, "using " NAME ": argument required"); \
+        goto error; \
+      } else {}
+
+#define DEFINE_FINDSTATE() \
+      struct cmd_find_state fs, fsCurrent = { \
+        .cmdq = cmdq, \
+	.flags = quiet ? CMD_FIND_QUIET : 0, \
+	.current = NULL, \
+	.s = s, \
+	.wl = wl, \
+	.w = w, \
+	.wp = wp, \
+	.idx = wl ? wl->idx : 0, \
+      };
+
+int tcl_using_context_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  if (argc == 1) goto error;
+  enum cmd_find_type find_type;
+
+  struct cmd_q          *cmdq = tcl_g->cmdq;
+  struct client         *c = tcl_g->c;
+  struct session        *s = tcl_g->s;
+  struct window         *w = tcl_g->w;
+  struct window_pane    *wp = tcl_g->wp;
+  struct winlink        *wl = tcl_g->wl;
+  int quiet = 0;
+
+  int argi;
+  for (argi = 1; argi < argc; argi++) {
+    if (!strcmp(argv[argi], "-q")) {
+      quiet = 1;
+    } else if (!strcmp(argv[argi], "-noq")) {
+      quiet = 0;
+    } else if (!strcmp(argv[argi], CTX_CLIENT)) {
+      SHIFT_TO_ARG("client");
+      if (!(c = cmd_find_client(cmdq, argv[argi], quiet))) {
+        tcl_error("Client not found");
+        return TCL_ERROR;
+      }
+      /* from cmd_find_current_session */
+      s = c->session;
+      wl = s ? s->curw : NULL;
+      w = wl ? wl->window : NULL;
+      wp = w ? w->active : NULL;
+    } else if (!strcmp(argv[argi], CTX_SESSION)) {
+      SHIFT_TO_ARG("session");
+      DEFINE_FINDSTATE();
+      cmd_find_clear_state(&fs, cmdq, quiet ? CMD_FIND_QUIET : 0);
+      if (cmd_find_target(&fs, &fsCurrent, cmdq, argv[argi], CMD_FIND_SESSION, quiet ? CMD_FIND_QUIET : 0) != 0) {
+        tcl_error("Session not found");
+        return TCL_ERROR;
+      }
+      s = fs.s; w = fs.w; wp = fs.wp; wl = fs.wl;
+      //w=0; wp=0;
+    } else if (!strcmp(argv[argi], CTX_WINDOW)) {
+      SHIFT_TO_ARG("window");
+      DEFINE_FINDSTATE();
+      cmd_find_clear_state(&fs, cmdq, quiet ? CMD_FIND_QUIET : 0);
+      if (cmd_find_target(&fs, &fsCurrent, cmdq, argv[argi], CMD_FIND_SESSION, quiet ? CMD_FIND_QUIET : 0) != 0) {
+        tcl_error("Window not found");
+        return TCL_ERROR;
+      }
+      s = fs.s; w = fs.w; wp = fs.wp; wl = fs.wl;
+      //w=0; wp=0;
+    } else if (!strcmp(argv[argi], CTX_PANE)) {
+      SHIFT_TO_ARG("pane");
+      DEFINE_FINDSTATE();
+      cmd_find_clear_state(&fs, cmdq, quiet ? CMD_FIND_QUIET : 0);
+      if (cmd_find_target(&fs, &fsCurrent, cmdq, argv[argi], CMD_FIND_SESSION, quiet ? CMD_FIND_QUIET : 0) != 0) {
+        tcl_error("Pane not found");
+        return TCL_ERROR;
+      }
+      s = fs.s; w = fs.w; wp = fs.wp; wl = fs.wl;
+    } else {
+      if (argc - argi != 1) {
+        cmdq_error(tcl_g->cmdq, "using: unknown word: %s", argv[argi]);
+        Tcl_AddErrorInfo(tcl_interp, "using: unknown word");
+        goto error;
+      }
+      break;
+    }
+  }
+  if (argi >= argc) {
+    cmdq_error(tcl_g->cmdq, "using: no script supplied");
+    Tcl_AddErrorInfo(tcl_interp, "using: no script supplied");
+    goto error;
+  }
+
+  global_enter(cmdq, c, s, w, wp, wl);
+
+  int ret = Tcl_Eval(interp, argv[argi]);
+
+  global_leave();
+
+  return ret;
+
+error:
+  tcl_error(
+      "Usage: using [-q|-noq] CONTEXT { SCRIPT }\n"
+      " Execute the SCRIPT in CONTEXT where CONTEXT is: {client c | session s | window w | pane p}\n"
+      " see man tmux: target-client, target-session target-window, or target-pane.");
+  return TCL_ERROR;
+}
+#undef SHIFT_TO_ARG
+
+
 
 extern const struct mode_key_cmdstr mode_key_cmdstr_copy[];
 extern const struct mode_key_cmdstr mode_key_cmdstr_choice[];
@@ -1006,6 +1126,9 @@ void tcl_init(int argc, char **argv)
       (ClientData) 0, NULL ) ;
 
   tcl_create_command_and_aliases(tcl_interp, "nop", &tcl_nop_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_and_aliases(tcl_interp, "using", &tcl_using_context_proc,
       (ClientData) 0, NULL ) ;
 
   tcl_create_mode_commands();
