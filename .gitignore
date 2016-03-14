@@ -19,6 +19,8 @@ configure
 tmux.1.*
 
 .*.swp
+.*.swo
+.*.swf
 cscope.files
 cscope.out
 tmux-*.log
