@@ -83,6 +83,23 @@ bind-key -Txprefix ? tcl {
 	bottom-line
 }
 
+proc walk-dirtree {d prev} {
+	if {[catch {glob -type d "$d/*"} dirs]} { set dirs "" }
+	if {[catch {glob -type f "$d/*"} files]} { set files "" }
+	set dirs [linsert $dirs 0 $d [regsub {/[^/]*$} $d ""] ]
+	choose-from-list \
+		-selected-id $prev \
+		-cmd [format {walk-dirtree [string range $_ 0 end-1] %s} [list "$d/"]] \
+			-list [lmap d $dirs {list "$d/"}] \
+		"" \
+		-cmd {print {*}[split [read_file $_] "\n"]} \
+			-list $files
+}
+
+bind-key -Txprefix l tcl {
+	walk-dirtree [f #{pane_current_path}] "[f #{pane_current_path}]/"
+}
+
 bind-key -Txprefix * tcl {
 	set files [split [exec ls -la] "\n"]
 	split-window;
@@ -164,6 +181,13 @@ bind-key -Tsel q tcl {
 	status-msg "Mode cancel"
 	cancel
 }
+
+bind-key -Tsel M-` tcl {
+	status-msg "Mode cancel"
+	cancel
+}
+
+
 
 #####################################################
 # http://wiki.tcl.tk/12574

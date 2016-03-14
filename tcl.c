@@ -896,7 +896,7 @@ int tcl_choose_from_list_proc(
 
   struct array_pwindow_choose_data items = ARRAY_INITIALIZER;
 
-  if (argc <= 1) goto error;
+  if (argc <= 1) goto usage;
 
   if (!tcl_g->c || !tcl_g->s || !tcl_g->wp) {
     tcl_error("choose-from-list: no client/session/windowpane");
@@ -920,7 +920,7 @@ int tcl_choose_from_list_proc(
         continue;
       } else if (!strcmp(arg, "-selected-idx")) {
         SHIFT_ARG("-selected-idx");
-        item_options.selected = atoi(arg);
+        selected_idx = atoi(arg);
         continue;
       } else if (!strcmp(arg, "-selected-id") || !strcmp(arg, "-selected-tag")) {
         SHIFT_ARG("-selected-id");
@@ -934,6 +934,27 @@ int tcl_choose_from_list_proc(
         SHIFT_ARG("-oncancel");
         choose_cancel_cmd = arg;
         continue;
+      } else if (!strcmp(arg, "-list")) {
+        SHIFT_ARG("-list");
+        int argc2;
+        Tcl_Obj *argObj = Tcl_NewStringObj(arg, -1);
+        Tcl_IncrRefCount(argObj);
+        Tcl_Obj **argv2;
+        if (Tcl_ListObjGetElements(tcl_interp, argObj, &argc2, &argv2) == TCL_ERROR) {
+          goto error;
+        }
+        for (int argi2 = 0; argi2 < argc2; argi2++) {
+          const char * arg2 = Tcl_GetString(argv2[argi2]);
+          cdata = window_choose_data_create(TREE_OTHER, tcl_g->c, tcl_g->c->session);
+          cdata->idx = ARRAY_LENGTH(&items);
+          cdata->ft_template = xstrdup(arg2); // text
+          cdata->id_tag = xstrdup(arg2);
+          if (item_options.cmd) cdata->command = xstrdup(item_options.cmd);
+          ARRAY_ADD(&items, cdata);
+        }
+        Tcl_DecrRefCount(argObj);
+        memset(&item_options, 0, sizeof(item_options));
+        continue;
       } else if (!strcmp(arg, "-val")) {
         SHIFT_ARG("-val");
         goto add_list_element;
@@ -942,13 +963,12 @@ int tcl_choose_from_list_proc(
         continue;
       } else {
         cmdq_error(tcl_g->cmdq, "choose-from-list : unknown option %s", arg);
-        Tcl_AddErrorInfo(tcl_interp, "choose-from-list : unknown option");
+        tcl_error_q("choose-from-list : unknown option");
         goto error;
       }
     } else {
 add_list_element:
       cdata = window_choose_data_create(TREE_OTHER, tcl_g->c, tcl_g->c->session);
-      ARRAY_ADD(&items, cdata);
 
       cdata->idx = ARRAY_LENGTH(&items);
       cdata->ft_template = xstrdup(arg); // text
@@ -956,14 +976,15 @@ add_list_element:
       cdata->id_tag = xstrdup(item_options.id ? item_options.id : arg);
       if (item_options.selected) selected_idx = cdata->idx;
 
+      ARRAY_ADD(&items, cdata);
+
       memset(&item_options, 0, sizeof(item_options));
     }
   }
 
   if (window_pane_set_mode(tcl_g->wp, &window_choose_mode) != 0) {
-        cmdq_error(tcl_g->cmdq, "choose-from-list : pane is already in mode");
-        Tcl_AddErrorInfo(tcl_interp, "choose-from-list : pane is already in mode");
-        goto error;
+    tcl_error("choose-from-list : pane is already in mode");
+    goto error;
   }
   if (choose_ok_cmd) {
     window_choose_mode_data_set_cmd_ok(tcl_g->wp->modedata, choose_ok_cmd);
@@ -973,7 +994,7 @@ add_list_element:
     cdata = ARRAY_ITEM(&items, i);
     window_choose_add(tcl_g->wp, cdata);
     if (selected_tag && !strcmp(selected_tag, cdata->id_tag)) {
-      selected_idx = cdata->idx;
+      selected_idx = i; //cdata->idx; // should match but can be arbitrary
     }
   }
 
@@ -985,7 +1006,9 @@ error:
   for (u_int i = 0; i < ARRAY_LENGTH(&items); i++)  {
     window_choose_data_free(ARRAY_ITEM(&items, i));
   }
+  return TCL_ERROR;
 
+usage:
   tcl_error(
       "Usage: choose-from-list {ITEM ...}\n"
       " Switch into choose-mode, make a choice from the list of items\n"
@@ -998,6 +1021,7 @@ error:
       "  -selected-id | -selected-tag: specify id of the tag selected\n"
       "  -onselect: script to execute when the choose-mode ends with a selection\n"
       "  -oncancel: script to execute when the user cancels choose-mode\n"
+      "  -list: add this list of elements\n"
       "  --   : no more options\n"
       " Press ^B ~ for full usage message");
   return TCL_ERROR;
@@ -1364,18 +1388,18 @@ void tcl_init(int argc, char **argv)
 
   Tcl_Eval(tcl_interp, "proc shell-quote {s} { return \"'[string map {' '\"'\"' \\\\ \\\\\\\\} $s]'\" }");
 
-  tcl_create_command_override(tcl_interp, "format", &tcl_format_proc,
+  tcl_create_command_nooverride(tcl_interp, "format", &tcl_format_proc,
       (ClientData) 0, NULL ) ;
   tcl_create_command_override(tcl_interp, "f", &tcl_format_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_override(tcl_interp, "format-time", &tcl_format_proc,
+  tcl_create_command_nooverride(tcl_interp, "format-time", &tcl_format_proc,
       (ClientData) 1, NULL ) ;
   tcl_create_command_override(tcl_interp, "ft", &tcl_format_proc,
       (ClientData) 1, NULL ) ;
 
-  tcl_create_command_override(tcl_interp, "parse", &tcl_tmuxparse_proc,
+  tcl_create_command_nooverride(tcl_interp, "parse", &tcl_tmuxparse_proc,
       (ClientData) 0, NULL ) ;
-  tcl_create_command_override(tcl_interp, "parse2script", &tcl_tmuxparse_proc,
+  tcl_create_command_nooverride(tcl_interp, "parse2script", &tcl_tmuxparse_proc,
       (ClientData) 1, NULL ) ;
   Tcl_Eval(tcl_interp, "proc         parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
   Tcl_Eval(tcl_interp, "proc         parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");

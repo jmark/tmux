@@ -352,11 +352,11 @@ the subsequent cpecifications are considered within the previous ones.
 
 =item *
 
-B<C<choose-from-list>> Make choice in choose-mode
+B<C<choose-from-list [OPTIONS ...] {ITEMS ...}>> Make choice in choose-mode
 
       "Usage: choose-from-list {ITEM ...}\n"
       " Switch into choose-mode, make a choice from the list of items\n"
-      " if an item starts with '-', this is an option for the item that follows it:\n"
+      " if an item starts with '-', this is an option for the item that follows:\n"
       "  -val : the following element IS the string to display\n"
       "  -id | -tag : identifier for the item\n"
       "  -cmd: script to execute when this item is selected\n"
@@ -365,6 +365,7 @@ B<C<choose-from-list>> Make choice in choose-mode
       "  -selected-id | -selected-tag: specify id of the tag selected\n"
       "  -onselect: script to execute when the choose-mode ends with a selection\n"
       "  -oncancel: script to execute when the user cancels choose-mode\n"
+      "  -list: add this list of elements\n"
       "  --   : no more options\n"
 
 =item *
