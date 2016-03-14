@@ -35,7 +35,7 @@
 
 enum cmd_retval	 cmd_find_window_exec(struct cmd *, struct cmd_q *);
 
-void	cmd_find_window_callback(struct window_choose_data *);
+void	cmd_find_window_callback(struct window_pane *, struct window_choose_mode_data *, struct window_choose_data *);
 
 /* Flags for determining matching behavior. */
 #define CMD_FIND_WINDOW_BY_TITLE   0x1
@@ -217,7 +217,7 @@ out:
 }
 
 void
-cmd_find_window_callback(struct window_choose_data *cdata)
+cmd_find_window_callback(struct window_pane *wp_, struct window_choose_mode_data *wcd, struct window_choose_data *cdata)
 {
 	struct session		*s;
 	struct window_pane	*wp;

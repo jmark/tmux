@@ -71,3 +71,177 @@ bind-key H tcl {
 	}
 }
 
+bind-key -Troot M-` tcl { status-msg "xprefix: ? for help"; switch-client -Txprefix }
+
+bind-key -Txprefix ? tcl {
+	show-messages
+	print "Xtended-Prefix mode help:"
+	print "? : help"
+	print "* : (in a shell) choose file or folder"
+	print "H : (in a shell) choose from history"
+	#history-bottom
+	bottom-line
+}
+
+bind-key -Txprefix * tcl {
+	set files [split [exec ls -la] "\n"]
+	split-window;
+	choose-from-list -onselect {
+		kill-pane
+		send-keys [regsub {^\s*(\S+\s+){8}} $_ {}]
+	} -oncancel {
+	} -- {*}$files
+	# select-pane +
+}
+
+bind-key -Txprefix H tcl {
+	if {[f #{pane_current_command}] eq "bash"} {
+		choose-from-list -onselect {
+			send-keys $_
+		} -- {*}[
+			lcomp {$x} for x in [
+				split [read_file ~/.bash_history] "\n"
+			] if {[string range $x 0 0] ne "#"}
+		]
+		end-of-list
+		up
+	} else {
+		print "Bash?"
+	}
+}
+
+bind-key -Txprefix Space tcl {
+	status-msg "Use arrow keys to navigate"
+	copy-mode
+	#cursor-up ; start-of-line
+	#mark-current-word
+	switch-client -Tsel
+}
+
+proc mark-current-word {} {
+	#if {![f #{pane_in_mode}]} return
+	#clear-selection
+	next-space-end
+	begin-selection
+	previous-space
+	if {[string range [copy-mode-selection] end-1 end-1] in {" " "\n" "\r"}} next-space
+}
+
+bind-key -Tsel Up tcl {
+	clear-selection
+	cursor-up
+	mark-current-word
+	switch-client -Tsel
+}
+
+bind-key -Tsel Down tcl {
+	clear-selection
+	cursor-down
+	mark-current-word
+	switch-client -Tsel
+}
+
+bind-key -Tsel Left tcl {
+	clear-selection
+	previous-space
+	mark-current-word
+	switch-client -Tsel
+}
+
+bind-key -Tsel Right tcl {
+	clear-selection
+	next-space ; cursor-left
+	mark-current-word
+	switch-client -Tsel
+}
+
+bind-key -Tsel Enter tcl {
+	status-msg "Selection copied; mode exit"
+	copy-selection
+}
+
+bind-key -Tsel q tcl {
+	status-msg "Mode cancel"
+	cancel
+}
+
+#####################################################
+# http://wiki.tcl.tk/12574
+# Iteration type	[foreach] example	[lcomp] example
+# Simple	foreach a $list {...}	lcomp {...} for a in $list
+# Striding	foreach {a b} $list {...}	lcomp {...} for {a b} in $list
+# Unpacking	foreach _ $list {lassign $_ a b; ...}	lcomp {...} for {a b} inside $list
+# Combinatorial	foreach a $list1 {foreach b $list2 {...}}	lcomp {...} for a in $list1 for b in $list2
+# Parallel	foreach a $list1 b $list2 {...}	lcomp {...} for a in $list1 and b in $list2
+# Conditional	foreach a $list {if {cond} {...}}	lcomp {...} for a in $list if {cond}
+#
+# [lcomp]	[foreach]
+# lcomp {$a * 2} for a in $list	set _ {}; foreach a $list {lappend _ [expr {$a * 2}]}; set _
+# lcomp {$b} {$a} for {a b} in $list	set _ {}; foreach {a b} $list {lappend _ $b $a}; set _
+
+proc lcomp {expression args} {
+    set __0__ "lappend __1__ \[expr [list $expression]\]"
+    while {[llength $args] && [lindex $args 0] ni {for if with}} {
+        append __0__ " \[expr [list [lindex $args 0]]\]"
+        set args [lrange $args 1 end]
+    }
+    set tmpvar 2
+    set structure {}
+    set upvars {}
+    while {[llength $args]} {
+        set prefix ""
+        switch [lindex $args 0] {
+        for {
+            set nest [list foreach]
+            while {[llength $nest] == 1 || [lindex $args 0] eq "and"} {
+                if {[llength $args] < 4 || [lindex $args 2] ni {in inside}} {
+                    error "wrong # operands: must be \"for\" vars \"in?side?\"\
+                           vals ?\"and\" vars \"in?side?\" vals? ?...?"
+                }
+                switch [lindex $args 2] {
+                in {
+                    lappend nest [lindex $args 1] [lindex $args 3]
+                } inside {
+                    lappend nest __${tmpvar}__ [lindex $args 3]
+                    append prefix "lassign \$__${tmpvar}__ [lindex $args 1]\n"
+                    incr tmpvar
+                }}
+                set args [lrange $args 4 end]
+            }
+            lappend structure $nest $prefix
+        } if {
+            if {[llength $args] < 2} {
+                error "wrong # operands: must be \"if\" condition"
+            }
+            lappend structure [list if [lindex $args 1]] $prefix
+            set args [lrange $args 2 end]
+        } with {
+            if {[llength $args] < 2} {
+                error "wrong # operands: must be \"with\" varlist"
+            }
+            foreach var [lindex $args 1] {
+                lappend upvars $var $var
+            }
+            set args [lrange $args 2 end]
+        } default {
+            error "bad opcode \"[lindex $args 0]\": must be for, if, or with"
+        }}
+    }
+    foreach {prefix nest} [lreverse $structure] {
+        set __0__ [concat $nest [list \n$prefix$__0__]]
+    }
+    if {[llength $upvars]} {
+        set __0__ "upvar 1 $upvars; $__0__"
+    }
+    unset -nocomplain expression args tmpvar prefix nest structure var upvars
+    set __1__ ""
+    eval $__0__
+    return $__1__
+}
+
+
+
+
+
+
+

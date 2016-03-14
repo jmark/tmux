@@ -213,6 +213,28 @@ void global_leave()
   free(g);
 }
 
+void
+tcl_cmdq_error(struct cmd_q *cmdq, const char *fmt, ...)
+{
+  va_list ap;
+  char *msg;
+
+  va_start(ap, fmt);
+  xvasprintf(&msg, fmt, ap);
+  va_end(ap);
+
+  char * msg1 = msg;
+  while(1) {
+    char * msg1e = strchr(msg1, '\n');
+    if (msg1e) *msg1e = 0;
+    cmdq_error(cmdq, "%s", msg1);
+    if (!msg1e) break;
+    msg1 = msg1e+1;
+    if (!*msg1) break; // strip last CR
+  }
+
+  free(msg);
+}
 int tcl2tmux_call1(
        ClientData clientData,
        Tcl_Interp *interp,
@@ -301,7 +323,7 @@ int tcl2tmux_call2(
 
 void tcl_error(const char * str)
 {
-    cmdq_error(tcl_g->cmdq, "%s", str);
+    tcl_cmdq_error(tcl_g->cmdq, "%s", str);
     Tcl_AddErrorInfo(tcl_interp, str);
     Tcl_SetErrorCode(tcl_interp, str, NULL);
     Tcl_SetResult(tcl_interp, str, NULL);
@@ -536,7 +558,7 @@ usage:
       "    tmux::_output-divert start txt\n"
       "    tmux::_output-divert start list\n"
       "    set x [tmux::_output-divert end]\n"
-      );
+      " Press ^B ~ for full usage message");
   return TCL_ERROR;
 }
 
@@ -569,8 +591,7 @@ int tcl_pbcopy_proc(
 {
   if (argc != 2) {
     tcl_error(
-        "Usage: pbcopy string\n"
-        " Put the string into the paste buffer");
+        "Usage: pbcopy string : Put the string into the paste buffer");
     return TCL_ERROR;
   }
 
@@ -598,8 +619,7 @@ int tcl_pbcontent_proc(
 {
   if (argc != 1) {
     tcl_error(
-        "Usage: pbcontent\n"
-        " Return the current paste buffer content");
+        "Usage: pbcontent : Return the current paste buffer content");
     return TCL_ERROR;
   }
 
@@ -776,11 +796,262 @@ error:
   tcl_error(
       "Usage: using [-q|-noq] CONTEXT { SCRIPT }\n"
       " Execute the SCRIPT in CONTEXT where CONTEXT is: {client c | session s | window w | pane p}\n"
-      " see man tmux: target-client, target-session target-window, or target-pane.");
+      " see man tmux: target-client, target-session target-window, or target-pane."
+      " Press ^B~ for full usage message");
   return TCL_ERROR;
 }
 #undef SHIFT_TO_ARG
 
+
+char * window_choose_mode_data_get_cmd_ok(struct window_choose_mode_data *modedata);
+char * window_choose_mode_data_set_cmd_ok(struct window_choose_mode_data *modedata, char * cmd);
+typedef void window_choose_callback(struct window_pane *wp, struct window_choose_mode_data *data, struct window_choose_data *wcd);
+void tcl_window_choose_callback(struct window_pane *wp, struct window_choose_mode_data *data, struct window_choose_data *wcd)
+{
+  /* from window_choose_default_callback */
+  if (wcd && wcd->start_client && wcd->start_client->flags & CLIENT_DEAD)
+    return;
+
+  if (wcd == NULL) {
+    //Tcl_CmdInfo cmdInfo;
+    //if (Tcl_GetCommandInfo(tcl_interp, "choose-from-list-cancel", &cmdInfo)) {
+    //  global_enter(
+    //      NULL, //wcd->start_client ? wcd->start_client->cmdq : NULL,
+    //      NULL, //wcd->start_client,
+    //      NULL, //wcd->start_session,
+    //      wp->window,
+    //      wp,
+    //      NULL // wcd->wl
+    //      );
+    //  if (Tcl_Eval(tcl_interp, "choose-from-list-cancel") == TCL_ERROR) {
+    //    log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
+    //    tcl_cmdq_error(tcl_g->cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
+    //  }
+    //  global_leave();
+    //}
+    return;
+  }
+
+  global_enter(
+      wcd->start_client ? wcd->start_client->cmdq : NULL,
+      wcd->start_client,
+      wcd->start_session,
+      wcd->wl ? wcd->wl->window : NULL,
+      wcd->wl ? window_pane_at_index(wcd->wl->window, wcd->pane_id) : NULL,
+      wcd->wl);
+
+  Tcl_SetVar2(tcl_interp, "_", NULL, wcd->id_tag, TCL_GLOBAL_ONLY);
+
+  if (wcd->command && Tcl_Eval(tcl_interp, wcd->command) == TCL_ERROR) {
+    log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
+    tcl_cmdq_error(tcl_g->cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
+  }
+
+  char * cmd = window_choose_mode_data_get_cmd_ok(data);
+  if (cmd && Tcl_Eval(tcl_interp, cmd) == TCL_ERROR) {
+    log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
+    tcl_cmdq_error(tcl_g->cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
+  }
+
+  Tcl_CmdInfo cmdInfo;
+  if (Tcl_GetCommandInfo(tcl_interp, "choose-from-list-ok", &cmdInfo) &&
+      Tcl_Eval(tcl_interp, "choose-from-list-ok") == TCL_ERROR)
+  {
+    log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
+    tcl_cmdq_error(tcl_g->cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
+  }
+
+  //Tcl_UnsetVar2(tcl_interp, "_", NULL, TCL_GLOBAL_ONLY);
+
+  global_leave();
+}
+
+#define SHIFT_ARG(NAME)  \
+      if ((++argi) >= argc) { \
+        cmdq_error(tcl_g->cmdq, "choose-from-list " NAME ": argument required"); \
+        Tcl_AddErrorInfo(tcl_interp, "choose-from-list " NAME ": argument required"); \
+        goto error; \
+      } else { arg = argv[argi]; }
+int tcl_choose_from_list_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  struct {
+    const char * id;
+    const char * cmd;
+    int selected;
+  } item_options = {NULL,NULL,0};
+  const char * choose_ok_cmd = NULL;
+  const char * choose_cancel_cmd = NULL;
+  u_int selected_idx = 0;
+  const char * selected_tag;
+  int doargs = 1;
+
+  struct items;
+  struct items {
+    struct window_choose_data *wcd;
+    struct items *next;
+  } *items_first = NULL, *items_last = NULL, *iNew, *next;
+
+  if (argc <= 1) goto error;
+
+  if (!tcl_g->c || !tcl_g->s || !tcl_g->wp) {
+    tcl_error("choose-from-list: no client/session/windowpane");
+    return TCL_ERROR;
+  }
+
+  int argi;
+  u_int idx = 0;
+  for (argi = 1; argi < argc; argi++) {
+    const char * arg = argv[argi];
+    if (doargs && *arg == '-') {
+      if (!strcmp(arg, "-id") || !strcmp(arg, "-tag")) {
+        SHIFT_ARG("-id");
+        item_options.id = arg;
+        continue;
+      } else if (!strcmp(arg, "-cmd")) {
+        SHIFT_ARG("-cmd");
+        item_options.cmd = arg;
+        continue;
+      } else if (!strcmp(arg, "-selected")) {
+        item_options.selected = 1;
+        continue;
+      } else if (!strcmp(arg, "-selected-idx")) {
+        SHIFT_ARG("-selected-idx");
+        item_options.selected = atoi(arg);
+        continue;
+      } else if (!strcmp(arg, "-selected-id") || !strcmp(arg, "-selected-tag")) {
+        SHIFT_ARG("-selected-id");
+        selected_tag = arg;
+        continue;
+      } else if (!strcmp(arg, "-onselect")) {
+        SHIFT_ARG("-onselect");
+        choose_ok_cmd = arg;
+        continue;
+      } else if (!strcmp(arg, "-oncancel")) {
+        SHIFT_ARG("-oncancel");
+        choose_cancel_cmd = arg;
+        continue;
+      } else if (!strcmp(arg, "-val")) {
+        SHIFT_ARG("-val");
+        goto add_list_element;
+      } else if (!strcmp(arg, "--")) {
+        doargs = 0;
+        continue;
+      } else {
+        cmdq_error(tcl_g->cmdq, "choose-from-list : unknown option %s", arg);
+        Tcl_AddErrorInfo(tcl_interp, "choose-from-list : unknown option");
+        goto error;
+      }
+    } else {
+add_list_element:
+      iNew = xmalloc(sizeof(*iNew));
+      iNew->next = NULL;
+      struct window_choose_data *cdata = iNew->wcd = window_choose_data_create(TREE_OTHER, tcl_g->c, tcl_g->c->session);
+
+      cdata->idx = idx;
+      cdata->ft_template = xstrdup(arg); // text
+      if (item_options.cmd) cdata->command = xstrdup(item_options.cmd);
+      cdata->id_tag = xstrdup(item_options.id ? item_options.id : arg);
+      if (item_options.selected) selected_idx = idx;
+
+      idx++;
+      if (!items_first) {
+        items_first = items_last = iNew;
+      } else {
+        items_last->next = iNew;
+        items_last = iNew;
+      }
+      memset(&item_options, 0, sizeof(item_options));
+    }
+  }
+
+  if (window_pane_set_mode(tcl_g->wp, &window_choose_mode) != 0) {
+        cmdq_error(tcl_g->cmdq, "choose-from-list : pane is already in mode");
+        Tcl_AddErrorInfo(tcl_interp, "choose-from-list : pane is already in mode");
+        goto error;
+  }
+  if (choose_ok_cmd) {
+    window_choose_mode_data_set_cmd_ok(tcl_g->wp->modedata, choose_ok_cmd);
+  }
+
+  while (items_first) {
+    next = items_first->next;
+    window_choose_add(tcl_g->wp, items_first->wcd);
+    if (selected_tag && !strcmp(selected_tag, items_first->wcd->id_tag)) {
+      selected_idx = items_first->wcd->idx;
+    }
+    free(items_first);
+    items_first = next;
+  }
+
+  window_choose_ready(tcl_g->wp, selected_idx, &tcl_window_choose_callback);
+
+  return TCL_OK;
+
+error:
+  while (items_first) {
+    next = items_first->next;
+    window_choose_data_free(items_first->wcd);
+    free(items_first);
+    items_first = next;
+  }
+
+  tcl_error(
+      "Usage: choose-from-list {ITEM ...}\n"
+      " Switch into choose-mode, make a choice from the list of items\n"
+      " if an item starts with '-', this is an option for the item that follows:\n"
+      "  -val : the following element IS the string to display\n"
+      "  -id | -tag : identifier for the item\n"
+      "  -cmd: script to execute when this item is selected\n"
+      "  -selected: this item is initially selected\n"
+      "  -selected-idx: specify the number of the tag selected\n"
+      "  -selected-id | -selected-tag: specify id of the tag selected\n"
+      "  -onselect: script to execute when the choose-mode ends with a selection\n"
+      "  -oncancel: script to execute when the user cancels choose-mode\n"
+      "  --   : no more options\n"
+      " Press ^B ~ for full usage message");
+  return TCL_ERROR;
+}
+#undef SHIFT_ARG
+
+
+int tcl_status_msg_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  if (argc != 2) goto error;
+  status_message_set(tcl_g->c, "%s", argv[1]);
+  return TCL_OK;
+
+error:
+  tcl_error(
+      " Usage: status-msg MESSAGE\n"
+      " Usage: status-msg-clear\n"
+      );
+  return TCL_ERROR;
+}
+int tcl_status_msg_clear_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  if (argc != 1) goto error;
+  status_message_clear(tcl_g->c);
+  return TCL_OK;
+
+error:
+  tcl_error(
+      " Usage: status-msg MESSAGE\n"
+      " Usage: status-msg-clear\n"
+      );
+  return TCL_ERROR;
+}
 
 
 extern const struct mode_key_cmdstr mode_key_cmdstr_copy[];
@@ -828,6 +1099,8 @@ int tcl_modecmd_proc(
     return TCL_ERROR;
   }
 
+  // TODO:: check for edit mode: c->prompt_string != NULL (grep status_prompt_key)
+  // TODO:: set/clead edit mode: status_prompt_set status_prompt_clear
   if (mcd->modeName) {
     /* known mode: ensure the mode */
     if (!strcmp(mcd->modeName, MODENAME_CHOICE)) {
@@ -910,6 +1183,21 @@ int tcl_modecmd_proc(
   // to look up the string->commandId
   // and wp->mode->key to dispatch the command
 }
+
+// TODO:: temporary key-table to temporrary modify an existing one (until mode exit)
+// TODO:: -OR- key-table inheritance:
+//              add 'inherit' table name to 'struct key_table'
+//              add inheritance loop to server_client_handle_key/RB_FIND keytable
+//              add 'inherit' table name to 'struct mode_key_data'
+//              process inheritance for mode keys in mode_key_lookup
+// TODO:: -OR- introduce 'soft' keytables:
+//              all keypresses are forwarded to a script
+//              func to 'get-key-action {TABLE} {KEY}' to forward the action
+//              can be done via existing keytables with 'fallback' command
+
+// TODO:: callback on window_pane_set_mode and window_pane_reset_mode
+
+// TODO:: callback on every keypress(?)
 
 // TODO:: function to operate with screen buffer: read and write
 
@@ -1131,6 +1419,14 @@ void tcl_init(int argc, char **argv)
   tcl_create_command_override(tcl_interp, "using", &tcl_using_context_proc,
       (ClientData) 0, NULL ) ;
 
+  tcl_create_command_override(tcl_interp, "status-msg", &tcl_status_msg_proc,
+      (ClientData) 0, NULL ) ;
+  tcl_create_command_override(tcl_interp, "status-msg-clear", &tcl_status_msg_clear_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_override(tcl_interp, "choose-from-list", &tcl_choose_from_list_proc,
+      (ClientData) 0, NULL ) ;
+
   tcl_create_mode_commands();
 
   log_debug("tcl init ok");
@@ -1224,7 +1520,7 @@ cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq)
 
   if (tcl_eval_args(tcl_interp, args->argc, args->argv) == TCL_ERROR) {
     log_debug("tcl error: %s", Tcl_GetStringResult(tcl_interp));
-    cmdq_error(cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
+    tcl_cmdq_error(cmdq, "Error: %s", Tcl_GetStringResult(tcl_interp));
 
     global_leave();
     return CMD_RETURN_ERROR;

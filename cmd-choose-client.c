@@ -35,7 +35,7 @@
 
 enum cmd_retval	 cmd_choose_client_exec(struct cmd *, struct cmd_q *);
 
-void	cmd_choose_client_callback(struct window_choose_data *);
+void	cmd_choose_client_callback(struct window_pane *, struct window_choose_mode_data *, struct window_choose_data *);
 
 const struct cmd_entry cmd_choose_client_entry = {
 	.name = "choose-client",
@@ -111,7 +111,7 @@ cmd_choose_client_exec(struct cmd *self, struct cmd_q *cmdq)
 }
 
 void
-cmd_choose_client_callback(struct window_choose_data *cdata)
+cmd_choose_client_callback(struct window_pane *wp, struct window_choose_mode_data *wcd, struct window_choose_data *cdata)
 {
 	struct client  	*c;
 	u_int		 idx;

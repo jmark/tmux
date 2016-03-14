@@ -21,11 +21,10 @@ tmux with sensible scripting
 
 =head1 SYNOPSIS
 
-In tmux...
+It was never previously possible in tmux:
 
   # Mark the current word in vi-copy mode
   bind-key -t vi-copy M-Enter tcl {
-    # mark the current word in copy-mode
     clear-selection
     previous-space
     begin-selection
@@ -33,34 +32,43 @@ In tmux...
   }
 
   # Open selection in vim in mini-window
-  :bind-key -t vi-copy Y tcl {
+  bind-key -t vi-copy Y tcl {
     split-window -c [f #{pane_current_path}] -l 5 "
 		echo -n [shell-quote [copy-mode-selection]] | vim -R -"
   }
 
   # Open selection in emacs in mini-window
-  :bind-key -t emacs-copy Y tcl {
+  bind-key -t emacs-copy Y tcl {
 	split-window -c [f #{pane_current_path}] -l 5 "
 		emacs --insert <(echo -n [shell-quote [copy-mode-selection]])"
   }
 
+  #choose from list and switch to git branch
+  choose-from-list {*}[split [exec git branch -av] "\n"] -onselect {
+    exec git checkout [lindex [split [string range $_ 2 end] " "] 0]
+  }
+
 =head1 DESCRIPTION
 
-This version of tmux has TCL as its config-and-command language.
+From now on we have first class turing-complete
+config-and-command language support in tmux.
 
-The choice of the language to use was simple:
+The choice of the language to use is simple:
 (A) TCL is easily embeddable and
-(B) the syntax is similar to the those of tmux (and bash)
+(B) the syntax is very much like tmux-lang and bash
 
-In most cases all your old configs and commands will work as they are.
+All your old configs will continue to work exactly as they did.
 
-The intention was to smooth over the pain of scripting attempts
-in tmux and bring the experience to that of vim/emacs as close as possible.
-The ultimate goal was to make everything accessible in script.
+Great products for geeks have full-fledged scripting support:
+vim, emacs, and many others.
+Tmux is a great thing, too. And now it can be scripted as well.
 
 TCL extension leaves tmux fully compatible with TCL-less one.
-There's only a new tmux command to execute TCL and all old tmux
-commands are transparently usable from TCL.
+There's only a new tmux command to execute TCL and all tmux
+commands are transparently usable from TCL. Including 'mode' ones!
+
+You can assign any number of actions to 'mode' keypresses
+and ever write a script of any complexity.
 
 =head1 TMUX EXTENSIONS
 
@@ -75,14 +83,14 @@ New command B<C<tcl>> and alias B<C<t>> in all modes
 From now on, just use C<tcl [command]> to script in TCL.
 
 If there's a value returned from script/function, it will be displayed
-on screen and in message area (^B ~).
+on screen and in message area (C<^B ~> for multiline output).
 
 =item *
 
 Global option B<C<tcl>>
 
 Numeric (boolean) option to control the mode of command prompt within tmux.
-If this evaluates to true (non-zero), the command prompt will accept
+If this evaluates to true (non-zero), the command prompt (C<^B :>) will accept
 tcl commands directly.
 
 =item *
@@ -92,12 +100,14 @@ Global option B<C<have_tcl>>
 Numeric (boolean) flag that would tell you that TCL is present
 in this version of tmux.
 
-To execute additional TCL commands in a compatible way,
+To execute additional TCL init config in a compatible way,
 add the following to your F<.tmux.conf>:
 
   if-shell -F "#{have_tcl}" "tcl source ~/.tmux.tcl"
 
-Done so, your config will work with both standard and scriptable versions of tmux.
+and put a file named F<.tmux.tcl> in your home dir.
+
+Done so, your config will work in both standard and scriptable versions of tmux.
 
 =back
 
@@ -105,7 +115,7 @@ Done so, your config will work with both standard and scriptable versions of tmu
 
 This section presumes tmux is in TCL command mode.
 
-To switch to it, execute this command in tmux or add it to config:
+To switch it on, execute this command in tmux, or add to config:
 
   set tcl 1
 
@@ -139,7 +149,7 @@ or (better) way to do it in TCL mode:
 
 =item *
 
-"mode" commands are generally not accessible and not scriptable in tmux.
+Originally, "mode" commands are not accessible and not scriptable in tmux.
 In TCL mode, all of them are first-class commands and can be used as any
 other command.
 
@@ -152,11 +162,11 @@ In TCL, "mode" commands are accessible in various ways:
 where MODENAME is C<copy> or C<choice>.
 
 The commands in each mode are implemented on their own in tmux.
-The commands that happen to have the same name internally coded to do
-different things in modes.
-This is why TCL has to ensure the current mode is meant for this command.
+The commands that happen to have the same name are internally coded
+as separate functions to do different things in modes.
+This is why TCL has to ensure the current mode is the right one for 'mode' command.
 
-This form of "mode" command the safest and preferable.
+This form of "mode" command the safest and preferable (less convenient, though).
 
 =item B<C<::tmux::mode::COMMAND>>, B<C<::tmux::COMMAND>>, global B<C<COMMAND>>
 
@@ -167,11 +177,11 @@ In a particular mode not all of the commands will actually work because
 these namespaces contain the commands for all modes.
 
 This form is short and convenient to use but to make sure the command
-is good for the current mode, check C<::tmux::mode:MODENAME::> namespace first.
+is good for the current mode, check C<::tmux::mode::MODENAME::> namespace first.
 
-Some of 'short' commands can be confusing.
+Some of 'short' command naming can be confusing.
 
-For example, there is no command C<up> in copy-mode but there is C<cursor-up> one.
+For instance, the command C<up> won't fit for copy-mode but there is a C<cursor-up> one.
 
 If there's a name clash,
 "mode" command will yield to the existing one.
@@ -181,6 +191,7 @@ But that can always be found under C<::tmux::mode::*> namespace.
 
 The full list of "mode" commands:
 
+  print {*}[info commands ::tmux::mode::*] ; # all mode commands
   print {*}[info commands ::tmux::mode::copy::*] ; # copy mode cmds
   print {*}[info commands ::tmux::mode::choice::*] ; # choice mode cmds
 
@@ -188,7 +199,7 @@ TODO: support 'edit' mode, too.
 
 =back
 
-=head2 Convenience TCL commands
+=head2 New TCL mode commands
 
 =over
 
@@ -203,6 +214,10 @@ B<C<format-time>> and B<C<ft>> will first call C<strftime> on their argument.
 B<C<format>> and B<C<f>> just use internal formatting routine.
 
   :f #{pane_current_path}
+
+Refer to L<tmux(1)> manpage, C<FORMATS> section.
+
+TODO: document/API for the full list of formattable options
 
 =item *
 
@@ -233,23 +248,23 @@ parse and execute as TCL
 
 B<C<output-of-txt>>, B<C<output-of-list>> - capture the output of a command
 
-Since tmux never wanted to do scripting by itself, the most commands that
-return data do it as text output.
+Since tmux never wanted to do scripting by itself, the most commands
+return data as text output.
 
 To be able to deal with it in a programming language, one needs to intercept
-the output and put it into a variable or function argument.
+the output to put it into a variable or function argument.
 
-These functions temporarily divert the output while the code block executes
+This set of functions temporarily divert the output while the code block executes
 and return the catch:
 
   # put command line in TCL mode
   :set tcl
   # list keys in the usual way
-  :list-keys -t vi-copy
+  list-keys -t vi-copy
   # return output as a single string
-  :output-of-txt { list-keys -t vi-copy }
+  output-of-txt { list-keys -t vi-copy }
   # return output as list of strings
-  :output-of-list { list-keys -t vi-copy }
+  output-of-list { list-keys -t vi-copy }
 
 =item *
 
@@ -260,13 +275,13 @@ B<C<pblist>> - clipboard functions:
 
 =over
 
-=item B<C<pbcopy [string]>>
+=item B<C<pbcopy {string}>>
 
 push the string into clipboard buffers
 
 =item B<C<pbpaste>>
 
-not implemented, almost equivalent to S<B<C<:send-keys [pbcontent]>>>
+not implemented, almost equivalent to S<B<C<:send-keys {pbcontent}>>>
 
 =item B<C<pbcontent>>
 
@@ -280,13 +295,21 @@ return the list of all clipboard buffers
 
 =item *
 
-B<C<copy-mode-selection>> - current selection in copy mode
+B<C<copy-mode-selection>> - currently hilighted selection in copy mode
 
 =item *
 
-B<C<print [string]>> - output message
+B<C<print [string ...]>> - output message
 
-Prints message to the messages pane (^B ~).
+Prints message to the messages pane (C<^B ~>).
+
+=item *
+
+Status bar functions:
+
+B<C<status-msg MESSAGE>> Display message on the bottom status bar
+
+B<C<status-msg-clear>> Reset status bar
 
 =item *
 
@@ -298,20 +321,20 @@ C<context> is a sequence of:
 
 =over
 
-=item B<C<client {client-spec}>>
+=item B<C<using client {client-spec} { script }>>
 
-=item B<C<session {session-spec}>>
+=item B<C<using session {session-spec} { script }>>
 
-=item B<C<window {window-spec}>>
+=item B<C<using window {window-spec} { script }>>
 
-=item B<C<pane {pane-spec}>>
+=item B<C<using pane {pane-spec} { script }>>
 
 =back
 
 For the cpecifications, see L<tmux(1)> manual, keywords
 C<target-client>, C<target-session>, C<target-window>, C<target-pane>.
 
-B<NOTE> that this will not affect the original tmux commands:
+B<NOTE> that this will B<not> affect the original tmux commands:
 they will still require C<-t> (or whatever) flag to specify the target.
 
 B<Examples:>
@@ -320,6 +343,29 @@ B<Examples:>
   print [using pane %1 {f #{pane_current_path}}]
   print [using pane :.1 {f #{pane_current_path}}]
   print [using window :1 {f #{pane_current_path}}]
+  print [using client stty01 {f #{pane_current_path}}]
+
+The cpecifications can nest:
+the subsequent cpecifications are considered within the previous ones.
+
+  print [using client stty01 window :1 pane %0 {f #{pane_current_path}}]
+
+=item *
+
+B<C<choose-from-list>> Make choice in choose-mode
+
+      "Usage: choose-from-list {ITEM ...}\n"
+      " Switch into choose-mode, make a choice from the list of items\n"
+      " if an item starts with '-', this is an option for the item that follows it:\n"
+      "  -val : the following element IS the string to display\n"
+      "  -id | -tag : identifier for the item\n"
+      "  -cmd: script to execute when this item is selected\n"
+      "  -selected: this item is initially selected\n"
+      "  -selected-idx: specify the number of the tag selected\n"
+      "  -selected-id | -selected-tag: specify id of the tag selected\n"
+      "  -onselect: script to execute when the choose-mode ends with a selection\n"
+      "  -oncancel: script to execute when the user cancels choose-mode\n"
+      "  --   : no more options\n"
 
 =item *
 

@@ -854,6 +854,7 @@ struct window_choose_data {
 	struct format_tree	*ft;
 
 	char			*command;
+	char			*id_tag;
 };
 
 /* Child window structure. */
@@ -2236,10 +2237,11 @@ int		 window_copy_scroll_position(struct window_pane *);
 
 /* window-choose.c */
 extern const struct window_mode window_choose_mode;
+struct window_choose_mode_data;
 void		 window_choose_add(struct window_pane *,
 			 struct window_choose_data *);
 void		 window_choose_ready(struct window_pane *,
-		     u_int, void (*)(struct window_choose_data *));
+		     u_int, void (*)(struct window_pane *, struct window_choose_mode_data *, struct window_choose_data *));
 struct window_choose_data	*window_choose_data_create (int,
 		     struct client *, struct session *);
 void	window_choose_data_free(struct window_choose_data *);

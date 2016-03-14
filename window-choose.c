@@ -31,7 +31,7 @@ void	window_choose_resize(struct window_pane *, u_int, u_int);
 void	window_choose_key(struct window_pane *, struct client *,
 	    struct session *, key_code, struct mouse_event *);
 
-void	window_choose_default_callback(struct window_choose_data *);
+void	window_choose_default_callback(struct window_pane *, struct window_choose_mode_data *, struct window_choose_data *);
 struct window_choose_mode_item *window_choose_get_item(struct window_pane *,
 	    key_code, struct mouse_event *);
 
@@ -81,8 +81,19 @@ struct window_choose_mode_data {
 	const char		*input_prompt;
 	char			*input_str;
 
-	void 			(*callbackfn)(struct window_choose_data *);
+	void 			(*callbackfn)(struct window_pane *, struct window_choose_mode_data *, struct window_choose_data *);
+
+	char			*command_ok;
+	char			*command_cancel;
 };
+
+char * window_choose_mode_data_get_cmd_ok(struct window_choose_mode_data *modedata);
+char * window_choose_mode_data_get_cmd_ok(struct window_choose_mode_data *modedata) {
+  return modedata->command_ok;
+}
+char * window_choose_mode_data_set_cmd_ok(struct window_choose_mode_data *modedata, char * cmd) {
+  return modedata->command_ok = xstrdup(cmd);
+}
 
 void	window_choose_free1(struct window_choose_mode_data *);
 int     window_choose_key_index(struct window_choose_mode_data *, u_int);
@@ -133,7 +144,7 @@ window_choose_reset_top(struct window_pane *wp, u_int sy)
 
 void
 window_choose_ready(struct window_pane *wp, u_int cur,
-    void (*callbackfn)(struct window_choose_data *))
+    void (*callbackfn)(struct window_pane *, struct window_choose_mode_data *, struct window_choose_data *))
 {
 	struct window_choose_mode_data	*data = wp->modedata;
 
@@ -160,6 +171,8 @@ window_choose_init(struct window_pane *wp)
 	data->input_type = WINDOW_CHOOSE_NORMAL;
 	data->input_str = xstrdup("");
 	data->input_prompt = NULL;
+        data->command_ok = NULL;
+        data->command_cancel = NULL;
 
 	ARRAY_INIT(&data->list);
 	ARRAY_INIT(&data->old_list);
@@ -190,6 +203,7 @@ window_choose_data_create(int type, struct client *c, struct session *s)
 	wcd->ft_template = NULL;
 
 	wcd->command = NULL;
+	wcd->id_tag = NULL;
 
 	wcd->wl = NULL;
 	wcd->pane_id = -1;
@@ -218,6 +232,7 @@ window_choose_data_free(struct window_choose_data *wcd)
 	format_free(wcd->ft);
 
 	free(wcd->command);
+	free(wcd->id_tag);
 	free(wcd);
 }
 
@@ -248,7 +263,7 @@ window_choose_data_run(struct window_choose_data *cdata)
 }
 
 void
-window_choose_default_callback(struct window_choose_data *wcd)
+window_choose_default_callback(struct window_pane *wp, struct window_choose_mode_data *data, struct window_choose_data *wcd)
 {
 	if (wcd == NULL)
 		return;
@@ -282,6 +297,8 @@ window_choose_free1(struct window_choose_mode_data *data)
 	ARRAY_FREE(&data->list);
 	ARRAY_FREE(&data->old_list);
 	free(data->input_str);
+        if (data->command_ok) free(data->command_ok);
+        if (data->command_cancel) free(data->command_cancel);
 
 	screen_free(&data->screen);
 	free(data);
@@ -307,7 +324,7 @@ window_choose_fire_callback(struct window_pane *wp,
 	wp->modedata = NULL;
 	window_pane_reset_mode(wp);
 
-	data->callbackfn(wcd);
+	data->callbackfn(wp, data, wcd);
 
 	window_choose_free1(data);
 }
