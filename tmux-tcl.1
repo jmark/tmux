@@ -133,7 +133,7 @@
 .\" ========================================================================
 .\"
 .IX Title "README-TMUX-SCRIPTING 1"
-.TH README-TMUX-SCRIPTING 1 "2016-03-10" "tmux-tcl" "User Contributed Documentation"
+.TH README-TMUX-SCRIPTING 1 "2016-03-14" "tmux" "User Contributed Documentation"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
@@ -142,12 +142,11 @@
 tmux with sensible scripting
 .SH "SYNOPSIS"
 .IX Header "SYNOPSIS"
-In tmux...
+It was never previously possible in tmux:
 .PP
-.Vb 8
+.Vb 7
 \&  # Mark the current word in vi\-copy mode
 \&  bind\-key \-t vi\-copy M\-Enter tcl {
-\&    # mark the current word in copy\-mode
 \&    clear\-selection
 \&    previous\-space
 \&    begin\-selection
@@ -155,34 +154,43 @@ In tmux...
 \&  }
 \&
 \&  # Open selection in vim in mini\-window
-\&  :bind\-key \-t vi\-copy Y tcl {
+\&  bind\-key \-t vi\-copy Y tcl {
 \&    split\-window \-c [f #{pane_current_path}] \-l 5 "
 \&                echo \-n [shell\-quote [copy\-mode\-selection]] | vim \-R \-"
 \&  }
 \&
 \&  # Open selection in emacs in mini\-window
-\&  :bind\-key \-t emacs\-copy Y tcl {
+\&  bind\-key \-t emacs\-copy Y tcl {
 \&        split\-window \-c [f #{pane_current_path}] \-l 5 "
 \&                emacs \-\-insert <(echo \-n [shell\-quote [copy\-mode\-selection]])"
+\&  }
+\&
+\&  #choose from list and switch to git branch
+\&  choose\-from\-list {*}[split [exec git branch \-av] "\en"] \-onselect {
+\&    exec git checkout [lindex [split [string range $_ 2 end] " "] 0]
 \&  }
 .Ve
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
-This version of tmux has \s-1TCL\s0 as its config-and-command language.
+From now on we have first class turing-complete
+config-and-command language support in tmux.
 .PP
-The choice of the language to use was simple:
+The choice of the language to use is simple:
 (A) \s-1TCL\s0 is easily embeddable and
-(B) the syntax is similar to the those of tmux (and bash)
+(B) the syntax is very much like tmux-lang and bash
 .PP
-In most cases all your old configs and commands will work as they are.
+All your old configs will continue to work exactly as they did.
 .PP
-The intention was to smooth over the pain of scripting attempts
-in tmux and bring the experience to that of vim/emacs as close as possible.
-The ultimate goal was to make everything accessible in script.
+Great products for geeks have full-fledged scripting support:
+vim, emacs, and many others.
+Tmux is a great thing, too. And now it can be scripted as well.
 .PP
 \&\s-1TCL\s0 extension leaves tmux fully compatible with TCL-less one.
-There's only a new tmux command to execute \s-1TCL\s0 and all old tmux
-commands are transparently usable from \s-1TCL.\s0
+There's only a new tmux command to execute \s-1TCL\s0 and all tmux
+commands are transparently usable from \s-1TCL.\s0 Including 'mode' ones!
+.PP
+You can assign any number of actions to 'mode' keypresses
+and ever write a script of any complexity.
 .SH "TMUX EXTENSIONS"
 .IX Header "TMUX EXTENSIONS"
 The changes against the original tmux are:
@@ -192,12 +200,12 @@ New command \fB\f(CB\*(C`tcl\*(C'\fB\fR and alias \fB\f(CB\*(C`t\*(C'\fB\fR in a
 From now on, just use \f(CW\*(C`tcl [command]\*(C'\fR to script in \s-1TCL.\s0
 .Sp
 If there's a value returned from script/function, it will be displayed
-on screen and in message area (^B ~).
+on screen and in message area (\f(CW\*(C`^B ~\*(C'\fR for multiline output).
 .IP "\(bu" 4
 Global option \fB\f(CB\*(C`tcl\*(C'\fB\fR
 .Sp
 Numeric (boolean) option to control the mode of command prompt within tmux.
-If this evaluates to true (non-zero), the command prompt will accept
+If this evaluates to true (non-zero), the command prompt (\f(CW\*(C`^B :\*(C'\fR) will accept
 tcl commands directly.
 .IP "\(bu" 4
 Global option \fB\f(CB\*(C`have_tcl\*(C'\fB\fR
@@ -205,19 +213,21 @@ Global option \fB\f(CB\*(C`have_tcl\*(C'\fB\fR
 Numeric (boolean) flag that would tell you that \s-1TCL\s0 is present
 in this version of tmux.
 .Sp
-To execute additional \s-1TCL\s0 commands in a compatible way,
+To execute additional \s-1TCL\s0 init config in a compatible way,
 add the following to your \fI.tmux.conf\fR:
 .Sp
 .Vb 1
 \&  if\-shell \-F "#{have_tcl}" "tcl source ~/.tmux.tcl"
 .Ve
 .Sp
-Done so, your config will work with both standard and scriptable versions of tmux.
+and put a file named \fI.tmux.tcl\fR in your home dir.
+.Sp
+Done so, your config will work in both standard and scriptable versions of tmux.
 .SH "TCL MODE"
 .IX Header "TCL MODE"
 This section presumes tmux is in \s-1TCL\s0 command mode.
 .PP
-To switch to it, execute this command in tmux or add it to config:
+To switch it on, execute this command in tmux, or add to config:
 .PP
 .Vb 1
 \&  set tcl 1
@@ -249,7 +259,7 @@ or (better) way to do it in \s-1TCL\s0 mode:
 \&  print {*}[info commands ::tmux::*]
 .Ve
 .IP "\(bu" 4
-\&\*(L"mode\*(R" commands are generally not accessible and not scriptable in tmux.
+Originally, \*(L"mode\*(R" commands are not accessible and not scriptable in tmux.
 In \s-1TCL\s0 mode, all of them are first-class commands and can be used as any
 other command.
 .Sp
@@ -261,11 +271,11 @@ In \s-1TCL, \s0\*(L"mode\*(R" commands are accessible in various ways:
 where \s-1MODENAME\s0 is \f(CW\*(C`copy\*(C'\fR or \f(CW\*(C`choice\*(C'\fR.
 .Sp
 The commands in each mode are implemented on their own in tmux.
-The commands that happen to have the same name internally coded to do
-different things in modes.
-This is why \s-1TCL\s0 has to ensure the current mode is meant for this command.
+The commands that happen to have the same name are internally coded
+as separate functions to do different things in modes.
+This is why \s-1TCL\s0 has to ensure the current mode is the right one for 'mode' command.
 .Sp
-This form of \*(L"mode\*(R" command the safest and preferable.
+This form of \*(L"mode\*(R" command the safest and preferable (less convenient, though).
 .ie n .IP "\fB\fB""::tmux::mode::COMMAND""\fB\fR, \fB\fB""::tmux::COMMAND""\fB\fR, global \fB\fB""COMMAND""\fB\fR" 4
 .el .IP "\fB\f(CB::tmux::mode::COMMAND\fB\fR, \fB\f(CB::tmux::COMMAND\fB\fR, global \fB\f(CBCOMMAND\fB\fR" 4
 .IX Item "::tmux::mode::COMMAND, ::tmux::COMMAND, global COMMAND"
@@ -276,11 +286,11 @@ In a particular mode not all of the commands will actually work because
 these namespaces contain the commands for all modes.
 .Sp
 This form is short and convenient to use but to make sure the command
-is good for the current mode, check \f(CW\*(C`::tmux::mode:MODENAME::\*(C'\fR namespace first.
+is good for the current mode, check \f(CW\*(C`::tmux::mode::MODENAME::\*(C'\fR namespace first.
 .Sp
-Some of 'short' commands can be confusing.
+Some of 'short' command naming can be confusing.
 .Sp
-For example, there is no command \f(CW\*(C`up\*(C'\fR in copy-mode but there is \f(CW\*(C`cursor\-up\*(C'\fR one.
+For instance, the command \f(CW\*(C`up\*(C'\fR won't fit for copy-mode but there is a \f(CW\*(C`cursor\-up\*(C'\fR one.
 .Sp
 If there's a name clash,
 \&\*(L"mode\*(R" command will yield to the existing one.
@@ -290,15 +300,16 @@ But that can always be found under \f(CW\*(C`::tmux::mode::*\*(C'\fR namespace.
 .Sp
 The full list of \*(L"mode\*(R" commands:
 .Sp
-.Vb 2
+.Vb 3
+\&  print {*}[info commands ::tmux::mode::*] ; # all mode commands
 \&  print {*}[info commands ::tmux::mode::copy::*] ; # copy mode cmds
 \&  print {*}[info commands ::tmux::mode::choice::*] ; # choice mode cmds
 .Ve
 .Sp
 \&\s-1TODO:\s0 support 'edit' mode, too.
 .RE
-.SS "Convenience \s-1TCL\s0 commands"
-.IX Subsection "Convenience TCL commands"
+.SS "New \s-1TCL\s0 mode commands"
+.IX Subsection "New TCL mode commands"
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`format\*(C'\fB\fR, \fB\f(CB\*(C`f\*(C'\fB\fR, \fB\f(CB\*(C`format\-time\*(C'\fB\fR, \fB\f(CB\*(C`ft\*(C'\fB\fR \- get options; format string according to tmux # rules
 .Sp
@@ -311,6 +322,10 @@ These functions are useful to query settings and options.
 .Vb 1
 \&  :f #{pane_current_path}
 .Ve
+.Sp
+Refer to \fItmux\fR\|(1) manpage, \f(CW\*(C`FORMATS\*(C'\fR section.
+.Sp
+\&\s-1TODO:\s0 document/API for the full list of formattable options
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`parse\*(C'\fB\fR, \fB\f(CB\*(C`parse2script\*(C'\fB\fR, \fB\f(CB\*(C`parse2eval\*(C'\fB\fR, \fB\f(CB\*(C`parse_exec\*(C'\fB\fR \-
 parse and convert tmux config-or-command to \s-1TCL\s0 in various ways:
@@ -337,24 +352,24 @@ parse and execute as \s-1TCL\s0
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`output\-of\-txt\*(C'\fB\fR, \fB\f(CB\*(C`output\-of\-list\*(C'\fB\fR \- capture the output of a command
 .Sp
-Since tmux never wanted to do scripting by itself, the most commands that
-return data do it as text output.
+Since tmux never wanted to do scripting by itself, the most commands
+return data as text output.
 .Sp
 To be able to deal with it in a programming language, one needs to intercept
-the output and put it into a variable or function argument.
+the output to put it into a variable or function argument.
 .Sp
-These functions temporarily divert the output while the code block executes
+This set of functions temporarily divert the output while the code block executes
 and return the catch:
 .Sp
 .Vb 8
 \&  # put command line in TCL mode
 \&  :set tcl
 \&  # list keys in the usual way
-\&  :list\-keys \-t vi\-copy
+\&  list\-keys \-t vi\-copy
 \&  # return output as a single string
-\&  :output\-of\-txt { list\-keys \-t vi\-copy }
+\&  output\-of\-txt { list\-keys \-t vi\-copy }
 \&  # return output as list of strings
-\&  :output\-of\-list { list\-keys \-t vi\-copy }
+\&  output\-of\-list { list\-keys \-t vi\-copy }
 .Ve
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`pbcopy\*(C'\fB\fR,
@@ -362,14 +377,14 @@ and return the catch:
 \&\fB\f(CB\*(C`pbcontent\*(C'\fB\fR,
 \&\fB\f(CB\*(C`pblist\*(C'\fB\fR \- clipboard functions:
 .RS 4
-.ie n .IP "\fB\fB""pbcopy [string]""\fB\fR" 4
-.el .IP "\fB\f(CBpbcopy [string]\fB\fR" 4
-.IX Item "pbcopy [string]"
+.ie n .IP "\fB\fB""pbcopy {string}""\fB\fR" 4
+.el .IP "\fB\f(CBpbcopy {string}\fB\fR" 4
+.IX Item "pbcopy {string}"
 push the string into clipboard buffers
 .ie n .IP "\fB\fB""pbpaste""\fB\fR" 4
 .el .IP "\fB\f(CBpbpaste\fB\fR" 4
 .IX Item "pbpaste"
-not implemented, almost equivalent to \fB\f(CB\*(C`:send\-keys\ [pbcontent]\*(C'\fB\fR
+not implemented, almost equivalent to \fB\f(CB\*(C`:send\-keys\ {pbcontent}\*(C'\fB\fR
 .ie n .IP "\fB\fB""pbcontent""\fB\fR" 4
 .el .IP "\fB\f(CBpbcontent\fB\fR" 4
 .IX Item "pbcontent"
@@ -382,11 +397,17 @@ return the list of all clipboard buffers
 .RS 4
 .RE
 .IP "\(bu" 4
-\&\fB\f(CB\*(C`copy\-mode\-selection\*(C'\fB\fR \- current selection in copy mode
+\&\fB\f(CB\*(C`copy\-mode\-selection\*(C'\fB\fR \- currently hilighted selection in copy mode
 .IP "\(bu" 4
-\&\fB\f(CB\*(C`print [string]\*(C'\fB\fR \- output message
+\&\fB\f(CB\*(C`print [string ...]\*(C'\fB\fR \- output message
 .Sp
-Prints message to the messages pane (^B ~).
+Prints message to the messages pane (\f(CW\*(C`^B ~\*(C'\fR).
+.IP "\(bu" 4
+Status bar functions:
+.Sp
+\&\fB\f(CB\*(C`status\-msg MESSAGE\*(C'\fB\fR Display message on the bottom status bar
+.Sp
+\&\fB\f(CB\*(C`status\-msg\-clear\*(C'\fB\fR Reset status bar
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`using context { script }\*(C'\fB\fR \- execute script in context of another client/session/window/pane
 .Sp
@@ -394,19 +415,19 @@ Set default context for the commands in \f(CW\*(C`script\*(C'\fR.
 .Sp
 \&\f(CW\*(C`context\*(C'\fR is a sequence of:
 .RS 4
-.ie n .IP "\fB\fB""client {client\-spec}""\fB\fR" 4
-.el .IP "\fB\f(CBclient {client\-spec}\fB\fR" 4
-.IX Item "client {client-spec}"
+.ie n .IP "\fB\fB""using client {client\-spec} { script }""\fB\fR" 4
+.el .IP "\fB\f(CBusing client {client\-spec} { script }\fB\fR" 4
+.IX Item "using client {client-spec} { script }"
 .PD 0
-.ie n .IP "\fB\fB""session {session\-spec}""\fB\fR" 4
-.el .IP "\fB\f(CBsession {session\-spec}\fB\fR" 4
-.IX Item "session {session-spec}"
-.ie n .IP "\fB\fB""window {window\-spec}""\fB\fR" 4
-.el .IP "\fB\f(CBwindow {window\-spec}\fB\fR" 4
-.IX Item "window {window-spec}"
-.ie n .IP "\fB\fB""pane {pane\-spec}""\fB\fR" 4
-.el .IP "\fB\f(CBpane {pane\-spec}\fB\fR" 4
-.IX Item "pane {pane-spec}"
+.ie n .IP "\fB\fB""using session {session\-spec} { script }""\fB\fR" 4
+.el .IP "\fB\f(CBusing session {session\-spec} { script }\fB\fR" 4
+.IX Item "using session {session-spec} { script }"
+.ie n .IP "\fB\fB""using window {window\-spec} { script }""\fB\fR" 4
+.el .IP "\fB\f(CBusing window {window\-spec} { script }\fB\fR" 4
+.IX Item "using window {window-spec} { script }"
+.ie n .IP "\fB\fB""using pane {pane\-spec} { script }""\fB\fR" 4
+.el .IP "\fB\f(CBusing pane {pane\-spec} { script }\fB\fR" 4
+.IX Item "using pane {pane-spec} { script }"
 .RE
 .RS 4
 .PD
@@ -414,17 +435,95 @@ Set default context for the commands in \f(CW\*(C`script\*(C'\fR.
 For the cpecifications, see \fItmux\fR\|(1) manual, keywords
 \&\f(CW\*(C`target\-client\*(C'\fR, \f(CW\*(C`target\-session\*(C'\fR, \f(CW\*(C`target\-window\*(C'\fR, \f(CW\*(C`target\-pane\*(C'\fR.
 .Sp
-\&\fB\s-1NOTE\s0\fR that this will not affect the original tmux commands:
+\&\fB\s-1NOTE\s0\fR that this will \fBnot\fR affect the original tmux commands:
 they will still require \f(CW\*(C`\-t\*(C'\fR (or whatever) flag to specify the target.
 .Sp
 \&\fBExamples:\fR
 .Sp
-.Vb 4
+.Vb 5
 \&  print [f #{pane_current_path}]
 \&  print [using pane %1 {f #{pane_current_path}}]
 \&  print [using pane :.1 {f #{pane_current_path}}]
 \&  print [using window :1 {f #{pane_current_path}}]
+\&  print [using client stty01 {f #{pane_current_path}}]
 .Ve
+.Sp
+The cpecifications can nest:
+the subsequent cpecifications are considered within the previous ones.
+.Sp
+.Vb 1
+\&  print [using client stty01 window :1 pane %0 {f #{pane_current_path}}]
+.Ve
+.RE
+.IP "\(bu" 4
+\&\fB\f(CB\*(C`choose\-from\-list [OPTIONS ...] {ITEMS ...}\*(C'\fB\fR Make choice in choose-mode
+.Sp
+Switch into 'choice' mode to choose an item from the list.
+.Sp
+Each item can be preceeded by any number of options.
+After the item is added, all options are discarded.
+.Sp
+Where the commands are applicable, the \f(CW\*(C`tag\*(C'\fR of selected item
+is stored in variable \f(CW$_\fR of global namespace.
+I.e. for script to read it, in global context just use \f(CW$_\fR.
+When executing a function, should use \f(CW$::_\fR
+or \f(CW\*(C`global\*(C'\fR command to declare it.
+.Sp
+The options are:
+.RS 4
+.ie n .IP "\fB\fB""\-val VALUE""\fB\fR: the following element \s-1IS\s0 the string to display, regardless whether its first character is '\-'." 4
+.el .IP "\fB\f(CB\-val VALUE\fB\fR: the following element \s-1IS\s0 the string to display, regardless whether its first character is '\-'." 4
+.IX Item "-val VALUE: the following element IS the string to display, regardless whether its first character is '-'."
+.PD 0
+.ie n .IP "\fB\fB""\-id TAG""\fB\fR | \fB\fB""\-tag TAG""\fB\fR: tag the item. This \s-1ID\s0 will be used to refer to this item and will be saved in $_ when it selected." 4
+.el .IP "\fB\f(CB\-id TAG\fB\fR | \fB\f(CB\-tag TAG\fB\fR: tag the item. This \s-1ID\s0 will be used to refer to this item and will be saved in \f(CW$_\fR when it selected." 4
+.IX Item "-id TAG | -tag TAG: tag the item. This ID will be used to refer to this item and will be saved in $_ when it selected."
+.ie n .IP "\fB\fB""\-cmd {SCRIPT}""\fB\fR: script to execute when this item is selected." 4
+.el .IP "\fB\f(CB\-cmd {SCRIPT}\fB\fR: script to execute when this item is selected." 4
+.IX Item "-cmd {SCRIPT}: script to execute when this item is selected."
+.ie n .IP "\fB\fB""\-selected""\fB\fR: this item is initially selected" 4
+.el .IP "\fB\f(CB\-selected\fB\fR: this item is initially selected" 4
+.IX Item "-selected: this item is initially selected"
+.ie n .IP "\fB\fB""\-selected\-idx NUM""\fB\fR: specify the item index initially selected" 4
+.el .IP "\fB\f(CB\-selected\-idx NUM\fB\fR: specify the item index initially selected" 4
+.IX Item "-selected-idx NUM: specify the item index initially selected"
+.ie n .IP "\fB\fB""\-selected\-id TAG""\fB\fR | \fB\fB""\-selected\-tag TAG""\fB\fR: specify the tag selected" 4
+.el .IP "\fB\f(CB\-selected\-id TAG\fB\fR | \fB\f(CB\-selected\-tag TAG\fB\fR: specify the tag selected" 4
+.IX Item "-selected-id TAG | -selected-tag TAG: specify the tag selected"
+.ie n .IP "\fB\fB""\-onselect {SCRIPT}""\fB\fR: script to execute when the choose-mode ends with a selection" 4
+.el .IP "\fB\f(CB\-onselect {SCRIPT}\fB\fR: script to execute when the choose-mode ends with a selection" 4
+.IX Item "-onselect {SCRIPT}: script to execute when the choose-mode ends with a selection"
+.ie n .IP "\fB\fB""\-oncancel {SCRIPT}""\fB\fR: script to execute when the user cancels choose-mode" 4
+.el .IP "\fB\f(CB\-oncancel {SCRIPT}\fB\fR: script to execute when the user cancels choose-mode" 4
+.IX Item "-oncancel {SCRIPT}: script to execute when the user cancels choose-mode"
+.ie n .IP "\fB\fB""\-list {ITEM ...}""\fB\fR: add this group of elements, apply preceding options" 4
+.el .IP "\fB\f(CB\-list {ITEM ...}\fB\fR: add this group of elements, apply preceding options" 4
+.IX Item "-list {ITEM ...}: add this group of elements, apply preceding options"
+.ie n .IP "\fB\fB""\-\- {ITEM ...}""\fB\fR: no more options. Dashes have no more effect for all remaining arguments." 4
+.el .IP "\fB\f(CB\-\- {ITEM ...}\fB\fR: no more options. Dashes have no more effect for all remaining arguments." 4
+.IX Item "-- {ITEM ...}: no more options. Dashes have no more effect for all remaining arguments."
+.RE
+.RS 4
+.PD
+.Sp
+The order of script executed in case something's selected:
+.IP "1." 4
+Item's \fB\f(CB\*(C`\-cmd\*(C'\fB\fR
+.IP "2." 4
+Command's \fB\f(CB\*(C`\-onselect\*(C'\fB\fR
+.IP "3." 4
+Global \fB\f(CB\*(C`choose\-from\-list\-ok\*(C'\fB\fR
+.RE
+.RS 4
+.Sp
+All options except 'selected' apply to all \f(CW\*(C`\-list\*(C'\fR'ed items:
+.Sp
+.Vb 1
+\&  choose\-from\-list 1 \-cmd {print "N$_"} 2 3 \-cmd {print "X$_"} \-list {4 5 6}
+.Ve
+.Sp
+In this case \f(CW\*(C`print "N$_"\*(C'\fR applies to \f(CW2\fR
+and \f(CW\*(C`print "X$_"\*(C'\fR applies to \f(CW4\fR, \f(CW5\fR, \f(CW6\fR
 .RE
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`nop [args ...]\*(C'\fB\fR \- consume all arguments, do nothing, return nothing

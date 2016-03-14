@@ -354,19 +354,70 @@ the subsequent cpecifications are considered within the previous ones.
 
 B<C<choose-from-list [OPTIONS ...] {ITEMS ...}>> Make choice in choose-mode
 
-      "Usage: choose-from-list {ITEM ...}\n"
-      " Switch into choose-mode, make a choice from the list of items\n"
-      " if an item starts with '-', this is an option for the item that follows:\n"
-      "  -val : the following element IS the string to display\n"
-      "  -id | -tag : identifier for the item\n"
-      "  -cmd: script to execute when this item is selected\n"
-      "  -selected: this item is initially selected\n"
-      "  -selected-idx: specify the number of the tag selected\n"
-      "  -selected-id | -selected-tag: specify id of the tag selected\n"
-      "  -onselect: script to execute when the choose-mode ends with a selection\n"
-      "  -oncancel: script to execute when the user cancels choose-mode\n"
-      "  -list: add this list of elements\n"
-      "  --   : no more options\n"
+Switch into 'choice' mode to choose an item from the list.
+
+Each item can be preceeded by any number of options.
+After the item is added, all options are discarded.
+
+Where the commands are applicable, the C<tag> of selected item
+is stored in variable C<$_> of global namespace.
+I.e. for script to read it, in global context just use C<$_>.
+When executing a function, should use C<$::_>
+or C<global> command to declare it.
+
+The options are:
+
+=over
+
+=item B<C<-val VALUE>>: the following element IS the string to display,
+regardless whether its first character is '-'.
+
+=item B<C<-id TAG>> | B<C<-tag TAG>>: tag the item. This ID will be used
+to refer to this item and will be saved in C<$_> when it selected.
+
+=item B<C<-cmd {SCRIPT}>>: script to execute when this item is selected.
+
+=item B<C<-selected>>: this item is initially selected
+
+=item B<C<-selected-idx NUM>>: specify the item index initially selected
+
+=item B<C<-selected-id TAG>> | B<C<-selected-tag TAG>>: specify the tag selected
+
+=item B<C<-onselect {SCRIPT}>>: script to execute when the choose-mode ends with a selection
+
+=item B<C<-oncancel {SCRIPT}>>: script to execute when the user cancels choose-mode
+
+=item B<C<-list {ITEM ...}>>: add this group of elements, apply preceding options
+
+=item B<C<-- {ITEM ...}>>: no more options.
+Dashes have no more effect for all remaining arguments.
+
+=back
+
+The order of script executed in case something's selected:
+
+=over
+
+=item 1
+
+Item's B<C<-cmd>>
+
+=item 2
+
+Command's B<C<-onselect>>
+
+=item 3
+
+Global B<C<choose-from-list-ok>>
+
+=back
+
+All options except 'selected' apply to all C<-list>'ed items:
+
+  choose-from-list 1 -cmd {print "N$_"} 2 3 -cmd {print "X$_"} -list {4 5 6}
+
+In this case C<print "N$_"> applies to C<2>
+and C<print "X$_"> applies to C<4>, C<5>, C<6>
 
 =item *
 
