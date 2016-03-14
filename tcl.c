@@ -6,6 +6,8 @@
 
 #include "tmux.h"
 
+#include "array.h"
+
 #include <assert.h>
 
 enum cmd_retval cmd_tcl_exec(struct cmd *self, struct cmd_q *cmdq);
@@ -866,6 +868,8 @@ void tcl_window_choose_callback(struct window_pane *wp, struct window_choose_mod
   global_leave();
 }
 
+ARRAY_DECL(array_pwindow_choose_data, struct window_choose_data *);
+
 #define SHIFT_ARG(NAME)  \
       if ((++argi) >= argc) { \
         cmdq_error(tcl_g->cmdq, "choose-from-list " NAME ": argument required"); \
@@ -888,12 +892,9 @@ int tcl_choose_from_list_proc(
   u_int selected_idx = 0;
   const char * selected_tag;
   int doargs = 1;
+  struct window_choose_data * cdata;
 
-  struct items;
-  struct items {
-    struct window_choose_data *wcd;
-    struct items *next;
-  } *items_first = NULL, *items_last = NULL, *iNew, *next;
+  struct array_pwindow_choose_data items = ARRAY_INITIALIZER;
 
   if (argc <= 1) goto error;
 
@@ -903,7 +904,6 @@ int tcl_choose_from_list_proc(
   }
 
   int argi;
-  u_int idx = 0;
   for (argi = 1; argi < argc; argi++) {
     const char * arg = argv[argi];
     if (doargs && *arg == '-') {
@@ -947,23 +947,15 @@ int tcl_choose_from_list_proc(
       }
     } else {
 add_list_element:
-      iNew = xmalloc(sizeof(*iNew));
-      iNew->next = NULL;
-      struct window_choose_data *cdata = iNew->wcd = window_choose_data_create(TREE_OTHER, tcl_g->c, tcl_g->c->session);
+      cdata = window_choose_data_create(TREE_OTHER, tcl_g->c, tcl_g->c->session);
+      ARRAY_ADD(&items, cdata);
 
-      cdata->idx = idx;
+      cdata->idx = ARRAY_LENGTH(&items);
       cdata->ft_template = xstrdup(arg); // text
       if (item_options.cmd) cdata->command = xstrdup(item_options.cmd);
       cdata->id_tag = xstrdup(item_options.id ? item_options.id : arg);
-      if (item_options.selected) selected_idx = idx;
+      if (item_options.selected) selected_idx = cdata->idx;
 
-      idx++;
-      if (!items_first) {
-        items_first = items_last = iNew;
-      } else {
-        items_last->next = iNew;
-        items_last = iNew;
-      }
       memset(&item_options, 0, sizeof(item_options));
     }
   }
@@ -977,14 +969,12 @@ add_list_element:
     window_choose_mode_data_set_cmd_ok(tcl_g->wp->modedata, choose_ok_cmd);
   }
 
-  while (items_first) {
-    next = items_first->next;
-    window_choose_add(tcl_g->wp, items_first->wcd);
-    if (selected_tag && !strcmp(selected_tag, items_first->wcd->id_tag)) {
-      selected_idx = items_first->wcd->idx;
+  for (u_int i = 0; i < ARRAY_LENGTH(&items); i++)  {
+    cdata = ARRAY_ITEM(&items, i);
+    window_choose_add(tcl_g->wp, cdata);
+    if (selected_tag && !strcmp(selected_tag, cdata->id_tag)) {
+      selected_idx = cdata->idx;
     }
-    free(items_first);
-    items_first = next;
   }
 
   window_choose_ready(tcl_g->wp, selected_idx, &tcl_window_choose_callback);
@@ -992,11 +982,8 @@ add_list_element:
   return TCL_OK;
 
 error:
-  while (items_first) {
-    next = items_first->next;
-    window_choose_data_free(items_first->wcd);
-    free(items_first);
-    items_first = next;
+  for (u_int i = 0; i < ARRAY_LENGTH(&items); i++)  {
+    window_choose_data_free(ARRAY_ITEM(&items, i));
   }
 
   tcl_error(
