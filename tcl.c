@@ -633,6 +633,7 @@ int tcl_copymodeselection_proc(
 
   size_t len;
   char * buf = window_copy_get_selection(wp, &len);
+  buf[len] = 0;
   Tcl_SetResult(interp, buf, (Tcl_FreeProc*)free);
 
   return TCL_OK;
