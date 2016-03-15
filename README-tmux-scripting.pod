@@ -295,7 +295,41 @@ return the list of all clipboard buffers
 
 =item *
 
-B<C<copy-mode-selection>> - currently hilighted selection in copy mode
+copy mode functions:
+
+B<C<copy-mode-get-cx>> B<C<copy-mode-get-cy>> - cursor X and Y within the screen
+
+B<C<copy-mode-get-selx>> B<C<copy-mode-get-sely>> - coordinates of the other end
+of selection, in 'real' coordinates. Selection extents are from sel{x,y} to {cx,cy}.
+Contain B<garbage> is selection is not active.
+
+B<C<copy-mode-is-selecting>> - whether selection is active
+
+B<C<copy-mode-get-oy>> - 'offset y' for the window. Counts bottom-up.
+
+B<C<copy-mode-get-hsize>> - 'history size'. Actually, the limit for C<oy>.
+
+B<C<copy-mode-get-oy0>> - convenience function, returns window offset in natural coords, from the top.
+
+B<C<copy-mode-get-cy0>> - convenience function, returns y coordinate counting from the topmost buffer position.
+
+B<C<copy-mode-get-lastcx>> - tmux: C</* position in last line w/ content */>
+
+B<C<copy-mode-get-lastsx>> - tmux: C</* size of last line w/ content */>
+
+=item *
+
+B<C<copy-mode-selection>> - get currently hilighted selection in copy mode
+
+=item *
+
+B<C<copy-mode-screenline [-sy] SY [-sx SX] [-ex EX]>> - pick line in copy-mode
+
+B<C<-sy SY>> - Y position of the text line (default is current cursor position = [copy-mode-get-cy0] )
+
+B<C<-sx SX>> - starting X position of text in line (default 0)
+
+B<C<-ex EX>> - ending X position of text in line (default MAX)
 
 =item *
 

@@ -641,6 +641,7 @@ int tcl_pbcontent_proc(
 */
 extern const struct window_mode window_copy_mode;
 void * window_copy_get_selection(struct window_pane *wp, size_t *len);
+
 int tcl_copymodeselection_proc(
        ClientData clientData,
        Tcl_Interp *interp,
@@ -648,6 +649,7 @@ int tcl_copymodeselection_proc(
        const char **argv)
 {
   struct window_pane *wp = tcl_g->wp;
+  // TODO:: pane_in_mode = wp->screen != &wp->base
   if (!wp || wp->mode != &window_copy_mode) {
     Tcl_SetResult(interp, "", NULL);
     return TCL_OK;
@@ -660,6 +662,139 @@ int tcl_copymodeselection_proc(
 
   return TCL_OK;
 }
+
+struct window_copy_mode_data;
+typedef u_int window_copy_mode_data_get(struct window_copy_mode_data *data);
+#define WINDOW_COPY_MODE_DATA__GET(X) \
+u_int window_copy_mode_data_get_##X(struct window_copy_mode_data *data)
+
+WINDOW_COPY_MODE_DATA__GET(cx);
+WINDOW_COPY_MODE_DATA__GET(cy);
+WINDOW_COPY_MODE_DATA__GET(selx);
+WINDOW_COPY_MODE_DATA__GET(sely);
+WINDOW_COPY_MODE_DATA__GET(oy);
+WINDOW_COPY_MODE_DATA__GET(hsize);
+WINDOW_COPY_MODE_DATA__GET(lastcx);
+WINDOW_COPY_MODE_DATA__GET(lastsx);
+
+#undef WINDOW_COPY_MODE_DATA__GET
+u_int window_copy_mode_data_selecting(struct window_copy_mode_data *data);
+
+int tcl_copymode_cxcy_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  struct window_pane *wp = tcl_g->wp;
+  // TODO:: pane_in_mode = wp->screen != &wp->base
+  if (!wp || wp->mode != &window_copy_mode) {
+    tcl_error("Pane not in copy-mode");
+    return TCL_ERROR;
+  }
+
+  Tcl_Obj * ret = Tcl_NewIntObj(
+      ((window_copy_mode_data_get*)clientData)(
+        (struct window_copy_mode_data*)wp->modedata));
+  Tcl_IncrRefCount(ret);
+  Tcl_SetObjResult(interp, ret);
+  Tcl_DecrRefCount(ret);
+
+  return TCL_OK;
+}
+
+
+#define SHIFT_ARG(NAME)  \
+      if ((++argi) >= argc) { \
+        cmdq_error(tcl_g->cmdq, "copy-mode-screenline " NAME ": argument required"); \
+        Tcl_AddErrorInfo(tcl_interp, "copy-mode-screenline " NAME ": argument required"); \
+        goto error; \
+      } else { arg = argv[argi]; }
+#define GET_NUM_ARG(LIMIT) \
+      const char * errstr = NULL; \
+      long long nArg = strtonum(arg, 0, (LIMIT), &errstr); \
+      if (errstr) { \
+        cmdq_error(tcl_g->cmdq, "copy-mode-screenline : %s : %s", argv[argi-1], errstr); \
+        tcl_error_q("copy-mode-screenline : invalid parameter"); \
+        goto error; \
+      }
+#define SHIFT_TO_NUMARG(NAME, LIMIT) \
+      SHIFT_ARG(NAME); \
+      GET_NUM_ARG(LIMIT)
+
+void window_copy_copy_line(struct window_pane *wp, char **buf, size_t *off, u_int sy, u_int sx, u_int ex);
+
+int tcl_copymode_screenline_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  struct window_pane *wp = tcl_g->wp;
+  u_int sy=0, sx=0, ex=999999;
+  // TODO:: pane_in_mode = wp->screen != &wp->base
+  if (!wp || wp->mode != &window_copy_mode) {
+    tcl_error("Pane not in copy-mode");
+    return TCL_ERROR;
+  }
+
+  struct window_copy_mode_data * md = wp->modedata;
+  sy =
+    window_copy_mode_data_get_hsize(md) -
+    window_copy_mode_data_get_oy(md) +
+    window_copy_mode_data_get_cy(md);
+
+  int argi;
+  for (argi = 1; argi < argc; argi++) {
+    const char * arg = argv[argi];
+    if (*arg == '-') {
+      if (!strcmp(arg, "-sx")) {
+        SHIFT_TO_NUMARG("-sx", 999999);
+        sx = nArg;
+        continue;
+      } else if (!strcmp(arg, "-ex")) {
+        SHIFT_TO_NUMARG("-ex", 999999);
+        ex = nArg+1;
+        continue;
+      } else if (!strcmp(arg, "-sy")) {
+        SHIFT_TO_NUMARG("-sy", INT_MAX);
+        sy = nArg;
+        continue;
+      } else {
+        cmdq_error(tcl_g->cmdq, "copy-mode-screenline : unknown option %s", arg);
+        tcl_error_q("copy-mode-screenline : unknown option");
+        goto error;
+      }
+    } else {
+      if (*arg < '0' || *arg > '9') goto usage;
+      GET_NUM_ARG(INT_MAX);
+      sy = nArg;
+      continue;
+    }
+  }
+
+  char *line = xmalloc(1);
+  size_t off = 0;
+  window_copy_copy_line(wp, &line, &off, sy, sx, ex);
+  line[off] = 0;
+  Tcl_SetResult(tcl_interp, line, (Tcl_FreeProc*)free);
+
+  return TCL_OK;
+
+usage:
+  tcl_error(
+      "Usage: copy-mode-screenline [-sy] SY [-sx SX] [-ex EX]\n"
+      "SY - Y position of the text line (default is current cursor position = [copy-mode-get-cy0] )\n"
+      "SX - starting X position of text in line\n"
+      "EX - ending X position of text in line\n"
+      );
+error:
+  return TCL_ERROR;
+}
+#undef SHIFT_ARG
+
+
+/*****************/
 
 int tcl_print_proc(
        ClientData clientData,
@@ -1422,6 +1557,26 @@ void tcl_init(int argc, char **argv)
 
   tcl_create_command_override(tcl_interp, "copy-mode-selection", &tcl_copymodeselection_proc,
       (ClientData) 0, NULL ) ;
+
+#define WINDOW_COPY_MODE_DATA__GET(X) \
+  tcl_create_command_override(tcl_interp, "copy-mode-get-"#X, &tcl_copymode_cxcy_proc, \
+      (ClientData)&window_copy_mode_data_get_##X, NULL )
+  WINDOW_COPY_MODE_DATA__GET(cx);
+  WINDOW_COPY_MODE_DATA__GET(cy);
+  WINDOW_COPY_MODE_DATA__GET(selx);
+  WINDOW_COPY_MODE_DATA__GET(sely);
+  WINDOW_COPY_MODE_DATA__GET(oy);
+  WINDOW_COPY_MODE_DATA__GET(hsize);
+  WINDOW_COPY_MODE_DATA__GET(lastcx);
+  WINDOW_COPY_MODE_DATA__GET(lastsx);
+#undef WINDOW_COPY_MODE_DATA__GET
+  Tcl_Eval(tcl_interp, "proc copy-mode-get-oy0 {} { return expr {[copy-mode-get-hsize]-[copy-mode-get-oy]} }");
+  Tcl_Eval(tcl_interp, "proc copy-mode-get-cy0 {} { return expr {[copy-mode-get-hsize]-[copy-mode-get-oy]+[copy-mode-get-cy]} }");
+  tcl_create_command_override(tcl_interp, "copy-mode-is-selecting", &tcl_copymode_cxcy_proc,
+      (ClientData)&window_copy_mode_data_selecting, NULL );
+
+  tcl_create_command_override(tcl_interp, "copy-mode-screenline", &tcl_copymode_screenline_proc,
+      (ClientData) 0, NULL );
 
   tcl_create_command_override(tcl_interp, "print", &tcl_print_proc,
       (ClientData) 0, NULL ) ;

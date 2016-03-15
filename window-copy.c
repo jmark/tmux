@@ -158,6 +158,38 @@ struct window_copy_mode_data {
 	char			 jumpchar;
 };
 
+
+#define WINDOW_COPY_MODE_DATA__GET(X) \
+u_int window_copy_mode_data_get_##X(struct window_copy_mode_data *data); \
+u_int window_copy_mode_data_get_##X(struct window_copy_mode_data *data) \
+{ return data->X; }
+
+WINDOW_COPY_MODE_DATA__GET(cx)
+WINDOW_COPY_MODE_DATA__GET(cy)
+WINDOW_COPY_MODE_DATA__GET(selx)
+WINDOW_COPY_MODE_DATA__GET(sely)
+WINDOW_COPY_MODE_DATA__GET(oy)
+WINDOW_COPY_MODE_DATA__GET(lastcx)
+WINDOW_COPY_MODE_DATA__GET(lastsx)
+
+#undef WINDOW_COPY_MODE_DATA__GET
+
+u_int window_copy_mode_data_get_hsize(struct window_copy_mode_data *data);
+u_int
+window_copy_mode_data_get_hsize(struct window_copy_mode_data *data)
+{
+	return screen_hsize(data->backing);
+}
+
+u_int window_copy_mode_data_selecting(struct window_copy_mode_data *data);
+u_int
+window_copy_mode_data_selecting(struct window_copy_mode_data *data)
+{
+	struct screen			*s = &data->screen;
+	return s->sel.flag || s->sel.lineflag != LINE_SEL_NONE;
+}
+
+
 struct screen *
 window_copy_init(struct window_pane *wp)
 {

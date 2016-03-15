@@ -133,7 +133,7 @@
 .\" ========================================================================
 .\"
 .IX Title "README-TMUX-SCRIPTING 1"
-.TH README-TMUX-SCRIPTING 1 "2016-03-14" "tmux" "User Contributed Documentation"
+.TH README-TMUX-SCRIPTING 1 "2016-03-16" "tmux" "User Contributed Documentation"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
@@ -397,7 +397,37 @@ return the list of all clipboard buffers
 .RS 4
 .RE
 .IP "\(bu" 4
-\&\fB\f(CB\*(C`copy\-mode\-selection\*(C'\fB\fR \- currently hilighted selection in copy mode
+copy mode functions:
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-cx\*(C'\fB\fR \fB\f(CB\*(C`copy\-mode\-get\-cy\*(C'\fB\fR \- cursor X and Y within the screen
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-selx\*(C'\fB\fR \fB\f(CB\*(C`copy\-mode\-get\-sely\*(C'\fB\fR \- coordinates of the other end
+of selection, in 'real' coordinates. Selection extents are from sel{x,y} to {cx,cy}.
+Contain \fBgarbage\fR is selection is not active.
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-is\-selecting\*(C'\fB\fR \- whether selection is active
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-oy\*(C'\fB\fR \- 'offset y' for the window. Counts bottom-up.
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-hsize\*(C'\fB\fR \- 'history size'. Actually, the limit for \f(CW\*(C`oy\*(C'\fR.
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-oy0\*(C'\fB\fR \- convenience function, returns window offset in natural coords, from the top.
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-cy0\*(C'\fB\fR \- convenience function, returns y coordinate counting from the topmost buffer position.
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-lastcx\*(C'\fB\fR \- tmux: \f(CW\*(C`/* position in last line w/ content */\*(C'\fR
+.Sp
+\&\fB\f(CB\*(C`copy\-mode\-get\-lastsx\*(C'\fB\fR \- tmux: \f(CW\*(C`/* size of last line w/ content */\*(C'\fR
+.IP "\(bu" 4
+\&\fB\f(CB\*(C`copy\-mode\-selection\*(C'\fB\fR \- get currently hilighted selection in copy mode
+.IP "\(bu" 4
+\&\fB\f(CB\*(C`copy\-mode\-screenline [\-sy] SY [\-sx SX] [\-ex EX]\*(C'\fB\fR \- pick line in copy-mode
+.Sp
+\&\fB\f(CB\*(C`\-sy SY\*(C'\fB\fR \- Y position of the text line (default is current cursor position = [copy\-mode\-get\-cy0] )
+.Sp
+\&\fB\f(CB\*(C`\-sx SX\*(C'\fB\fR \- starting X position of text in line (default 0)
+.Sp
+\&\fB\f(CB\*(C`\-ex EX\*(C'\fB\fR \- ending X position of text in line (default \s-1MAX\s0)
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`print [string ...]\*(C'\fB\fR \- output message
 .Sp
