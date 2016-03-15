@@ -1234,6 +1234,8 @@ int tcl_modecmd_proc(
 
 // TODO:: TCL interface to window-choose mode: choose from list; choose from list of [tag, val]
 
+// TODO:: functions (for copy-mode?): get-line(index), get-cursor-[xy], get-screen-[xy], get-line(y), get-char(x,y), (?)get-char-under-cursor
+
 void /*Tcl_Command*/ tcl_create_command_override(Tcl_Interp *interp,
 				const char *cmdName, Tcl_CmdProc *proc,
 				ClientData clientData,
