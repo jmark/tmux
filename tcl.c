@@ -1371,6 +1371,10 @@ int tcl_modecmd_proc(
 
 // TODO:: functions (for copy-mode?): get-line(index), get-cursor-[xy], get-screen-[xy], get-line(y), get-char(x,y), (?)get-char-under-cursor
 
+// TODO:: select-current-word
+
+// TODO:: (temporary) change screen contents: text, "style" (screen-write.c)
+
 void /*Tcl_Command*/ tcl_create_command_override(Tcl_Interp *interp,
 				const char *cmdName, Tcl_CmdProc *proc,
 				ClientData clientData,

@@ -2,33 +2,70 @@
 # default tcl mode for command line
 :set tcl 1
 
-# Mark the current word:
+# Mark the current word in copy-mode:
 bind-key -t vi-copy M-Enter tcl {
-	# mark the current word in copy-mode
-	clear-selection
-	previous-space
-	begin-selection
-	next-space-end
+	mark-current-word
 }
 #bind-key -t vi-copy M-Enter tcl {display [copy-mode-selection]}
 
 # Jump to the next word and select
 bind-key -t vi-copy Tab tcl {
-	# mark the current word in copy-mode
 	clear-selection
 	next-space
-	begin-selection
-	next-space-end
+	mark-current-word
+}
+bind-key -t vi-copy M-Right tcl {
+	clear-selection
+	next-space
+	mark-current-word
 }
 # Jump to the previous word and select
 bind-key -t vi-copy BTab tcl {
-	# mark the current word in copy-mode
 	clear-selection
-	#cursor-right
 	previous-space
+	mark-current-word
+}
+bind-key -t vi-copy M-Left tcl {
+	clear-selection
 	previous-space
+	mark-current-word
+}
+
+bind-key -t vi-copy M-Up tcl {
+	clear-selection
+	cursor-up
+	mark-current-word
+}
+bind-key -t vi-copy M-Down tcl {
+	clear-selection
+	cursor-down
+	mark-current-word
+}
+
+
+proc is_word_char {c} {
+	print [scan $c %c]
+	return [expr {$c > " " && $c != "\x7f"}]
+}
+
+proc mark-current-word {} {
+	clear-selection
+	set l [copy-mode-screenline]
+	set x [copy-mode-get-cx]
+	print "<[string range $l $x $x]>"
+	if {![is_word_char [string range $l $x $x]]} return
+	incr x
+	while {[is_word_char [string range $l $x $x]]} {
+		cursor-right
+		incr x
+	}
+	incr x -2
 	begin-selection
-	next-space-end
+	while {[is_word_char [string range $l $x $x]]} {
+		cursor-left
+		if {$x < 1} return
+		incr x -1
+	}
 }
 
 # Open selection in a vim mini-window (no shell and files)
@@ -137,15 +174,6 @@ bind-key -Txprefix Space tcl {
 	switch-client -Tsel
 }
 
-proc mark-current-word {} {
-	#if {![f #{pane_in_mode}]} return
-	#clear-selection
-	next-space-end
-	begin-selection
-	previous-space
-	if {[string range [copy-mode-selection] end-1 end-1] in {" " "\n" "\r"}} next-space
-}
-
 bind-key -Tsel Up tcl {
 	clear-selection
 	cursor-up
@@ -169,7 +197,7 @@ bind-key -Tsel Left tcl {
 
 bind-key -Tsel Right tcl {
 	clear-selection
-	next-space ; cursor-left
+	next-space
 	mark-current-word
 	switch-client -Tsel
 }
