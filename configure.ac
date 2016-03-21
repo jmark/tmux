@@ -166,6 +166,24 @@ if test "x$found_curses" = xno; then
 	AC_MSG_ERROR("curses not found")
 fi
 
+# Look for tcl
+PKG_CHECK_MODULES(
+	LIBTCL,
+	[tcl >= 8.5],
+	[
+		CPPFLAGS="$LIBTCL_CFLAGS -DHAS_TCL=1 $CPPFLAGS"
+		LIBS="$LIBTCL_LIBS $LIBS"
+		found_tcl=yes
+	],
+	[
+		CPPFLAGS="-DNO_TCL=1 $CPPFLAGS"
+		found_tcl=no
+	]
+)
+if test "x$found_tcl" = xno; then
+	AC_MSG_ERROR("tcl not found")
+fi
+
 # Look for utempter.
 AC_CHECK_HEADER(utempter.h, have_utempter=yes, have_utempter=no)
 if test "x$have_utempter" = xyes; then

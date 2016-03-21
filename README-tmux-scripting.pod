@@ -481,6 +481,28 @@ B<C<shell-quote [string]>> - quote string to safely pass to shell
 
 =back
 
+=head1 BUILD
+
+  $ ./autogen.sh
+  $ ./configure
+  $ make
+  $ make install
+
+If a package is installed in another location,
+try first specifying PKG_CONFIG_PATH:
+
+  $ PKG_CONFIG_PATH=[path to dir with tcl.pl] ./configure
+
+The next step is LIB*_CFLAGS and LIB*_LIBS:
+
+  $ LIBEVENT_CFLAGS=-I.../libevent1 LIBEVENT_LIBS="-L.../libevent1 -levent" ./configure
+
+And the last way is to use CPPFLAGS and LDFLAGS:
+
+  $ CPPFLAGS="-I... -pipe ..." LDFLAGS="-L... -l..." ./configure
+
+Refer to tmux's F<README> for more build instructions.
+
 =head1 Why
 
 L<tmux(1)> is a pretty cool terminal multiplexor with unique features.
