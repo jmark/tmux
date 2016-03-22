@@ -2,7 +2,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(HAVE_TCL_H)
 #include <tcl.h>
+#elif defined(HAVE_TCL_TCL_H)
+#include <tcl/tcl.h>
+#elif defined(HAVE_TCL8_6_TCL_H)
+#include <tcl8.6/tcl.h>
+#elif defined(HAVE_TCL8_5_TCL_H)
+#include <tcl8.5/tcl.h>
+#else
+#include <tcl.h>
+#endif
 
 #include "tmux.h"
 

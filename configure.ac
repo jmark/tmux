@@ -176,8 +176,28 @@ PKG_CHECK_MODULES(
 		found_tcl=yes
 	],
 	[
-		CPPFLAGS="-DNO_TCL=1 $CPPFLAGS"
-		found_tcl=no
+		AC_SEARCH_LIBS(
+			Tcl_Init,
+			[tcl tcl8.6 tcl8.5],
+			AC_CHECK_HEADERS([tcl.h tcl/tcl.h tcl8.6/tcl.h tcl8.5/tcl.h], found_tcl_h=yes )
+			if test -z "$found_tcl_h"; then
+				AC_MSG_ERROR("tcl.h not found")
+			fi
+			CPPFLAGS="-DHAS_TCL=1 $CPPFLAGS"
+			found_tcl=yes
+			,
+			AC_MSG_CHECKING([tcl flags from tclsh])
+			if test -n `which tclsh`; then
+				CPPFLAGS="-I$(echo 'puts @<:@::tcl::pkgconfig get includedir,runtime@:>@'|tclsh) -DHAS_TCL=1 $CPPFLAGS"
+				LIBS="-L$(echo 'puts @<:@::tcl::pkgconfig get libdir,runtime@:>@'|tclsh) -ltcl $LIBS"
+				found_tcl=yes
+			else
+				CPPFLAGS="-DNO_TCL=1 $CPPFLAGS"
+				found_tcl=no
+				AC_MSG_ERROR("tcl not found")
+			fi
+			AC_MSG_RESULT(ok)
+		)
 	]
 )
 if test "x$found_tcl" = xno; then
