@@ -1,0 +1,6 @@
+{
+  "name": "tmux with scripting",
+  "tagline": "tmux with (sensible) scripting",
+  "body": "# tmux\r\n\r\n[README](https://github.com/ershov/tmux/blob/master/README-tmux-scripting.pod)",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}
