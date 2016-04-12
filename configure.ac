@@ -24,7 +24,7 @@ PKG_PROG_PKG_CONFIG
 test "$sysconfdir" = '${prefix}/etc' && sysconfdir=/etc
 
 # Is this --enable-debug?
-found_debug=yes
+#found_debug=yes
 AC_ARG_ENABLE(
 	debug,
 	AC_HELP_STRING(--enable-debug, enable debug build flags),
@@ -196,10 +196,25 @@ if test "x$found_tcl" = xno; then
 fi
 
 # Look for utempter.
-AC_CHECK_HEADER(utempter.h, have_utempter=yes, have_utempter=no)
-if test "x$have_utempter" = xyes; then
-	AC_DEFINE(HAVE_UTEMPTER)
-	LIBS="$LIBS -lutempter"
+AC_ARG_ENABLE(
+	utempter,
+	AC_HELP_STRING(--enable-utempter, use utempter if it is installed),
+	found_utempter=$enable_utempter,
+	found_utempter=yes
+)
+if test "x$found_utempter" = xyes; then
+	AC_CHECK_HEADER(utempter.h, found_utempter=yes, found_utempter=no)
+	if test "x$found_utempter" = xyes; then
+		AC_SEARCH_LIBS(
+			utempter_add_record,
+			utempter,
+			found_utempter=yes,
+			found_utempter=no
+		)
+		if test "x$found_utempter" = xyes; then
+			AC_DEFINE(HAVE_UTEMPTER)
+		fi
+	fi
 fi
 
 # Check for b64_ntop.
