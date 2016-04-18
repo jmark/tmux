@@ -29,7 +29,44 @@
       <div class="inner clearfix">
         <section id="main-content">
           <h1>
-<a id="tmux" class="anchor" href="#tmux" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>tmux</h1>
+<a id="scripting-for-tmux" class="anchor" href="#scripting-for-tmux" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>scripting for tmux</h1>
+
+<p>tmux is a great terminal multiplexor.
+Unfortunately, it lacks a decent scripting capability.</p>
+
+<p>This project fixes tmux and brings it the full power of computer language,
+yet preserving consizeness of command line.</p>
+
+<p>tmux has great support for "external scripting" via externally run bash scripts.
+This can be acceptable when there is some real amount of work to be done ocasionally.</p>
+
+<p>But what happens if</p>
+
+<ul>
+<li>you want an action on every keypress?</li>
+<li>you want loops?</li>
+<li>you want variables?</li>
+<li>you want something to be done conditionally?</li>
+<li>you want to do two or more actions in 'mode'? (e.g. scroll by two lines)</li>
+</ul>
+
+<p>Here is the solution for that.</p>
+
+<p>What it adds to tmux:</p>
+
+<ul>
+<li>Full set of all tmux functions available, regardless in 'mode' or not</li>
+<li>Full scripting capabilities in 'mode' (e.g. can bind multiple actions, etc)</li>
+<li>Variables</li>
+<li>Procedures and functions: don't have to duplicate repeating actions</li>
+<li>Loops</li>
+<li>Conditionals</li>
+<li>In other words, full power of programming language</li>
+</ul>
+
+<p>Full backwards compatibility: by default, tmux will use it's built-in language.</p>
+
+<p>The language attached to tmux has similar syntax: most probably, you will not notice the difference.</p>
 
 <p><a href="https://github.com/ershov/tmux/blob/master/README-tmux-scripting.pod">README</a></p>
         </section>
