@@ -455,6 +455,40 @@ and C<print "X$_"> applies to C<4>, C<5>, C<6>
 
 =item *
 
+B<C<get-list-keys [-T table]>> - get list of keybindings
+
+If C<-T table> option is given,
+the bindings for only the specified table is returned.
+
+The return format a list of the following values:
+
+  table key binding [options]
+
+The option currently is C<-r>.
+
+The 'binding' is in form of C<eval>-able script, for example:
+
+  prefix C-l {namespace eval ::tmux {refresh-client} ; }
+  prefix H {
+    if {[f #{pane_current_command}] eq "bash"} {
+      print {*}[split [read_file ~/.bash_history] "\n"]
+      history-bottom
+      cursor-upstart-of-line
+    } else {
+      print "Bash?"
+    }
+  }
+
+=item *
+
+B<C<canon-key key>> - 'canonical' key representation
+
+The key name converted to the one returned by C<list-keys>.
+
+Correct order of C<M->, C<S->, C<C-> and canonize some keys name e.g. PgUp writes as 'PPage'.
+
+=item *
+
 B<C<nop [args ...]>> - consume all arguments, do nothing, return nothing
 
 =back

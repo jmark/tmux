@@ -257,3 +257,39 @@ args_strtonum(struct args *args, u_char ch, long long minval, long long maxval,
 	*cause = NULL;
 	return (ll);
 }
+
+typedef void args2dstring_callback(void *, const char *);
+/* copy-paste from args_print */
+void args_iterate(struct args *args, args2dstring_callback arg_fn, void *param)
+{
+  char			*buf;
+  int			 i;
+  struct args_entry	*entry;
+
+  /* Process the flags first. */
+  RB_FOREACH(entry, args_tree, &args->tree) {
+    if (entry->value != NULL)
+      continue;
+
+    char f[] = "-X";
+    f[1] = entry->flag;
+    arg_fn(param, f);
+  }
+
+  /* Then the flags with arguments. */
+  RB_FOREACH(entry, args_tree, &args->tree) {
+    if (entry->value == NULL)
+      continue;
+
+    char f[] = "-X";
+    f[1] = entry->flag;
+    arg_fn(param, f);
+    arg_fn(param, entry->value);
+  }
+
+  /* And finally the argument vector. */
+  for (i = 0; i < args->argc; i++) {
+    arg_fn(param, args->argv[i]);
+  }
+}
+

@@ -133,7 +133,7 @@
 .\" ========================================================================
 .\"
 .IX Title "README-TMUX-SCRIPTING 1"
-.TH README-TMUX-SCRIPTING 1 "2016-03-22" "tmux" "User Contributed Documentation"
+.TH README-TMUX-SCRIPTING 1 "2016-04-25" "tmux" "User Contributed Documentation"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
@@ -555,6 +555,40 @@ All options except 'selected' apply to all \f(CW\*(C`\-list\*(C'\fR'ed items:
 In this case \f(CW\*(C`print "N$_"\*(C'\fR applies to \f(CW2\fR
 and \f(CW\*(C`print "X$_"\*(C'\fR applies to \f(CW4\fR, \f(CW5\fR, \f(CW6\fR
 .RE
+.IP "\(bu" 4
+\&\fB\f(CB\*(C`get\-list\-keys [\-T table]\*(C'\fB\fR \- get list of keybindings
+.Sp
+If \f(CW\*(C`\-T table\*(C'\fR option is given,
+the bindings for only the specified table is returned.
+.Sp
+The return format a list of the following values:
+.Sp
+.Vb 1
+\&  table key binding [options]
+.Ve
+.Sp
+The option currently is \f(CW\*(C`\-r\*(C'\fR.
+.Sp
+The 'binding' is in form of \f(CW\*(C`eval\*(C'\fR\-able script, for example:
+.Sp
+.Vb 10
+\&  prefix C\-l {namespace eval ::tmux {refresh\-client} ; }
+\&  prefix H {
+\&    if {[f #{pane_current_command}] eq "bash"} {
+\&      print {*}[split [read_file ~/.bash_history] "\en"]
+\&      history\-bottom
+\&      cursor\-upstart\-of\-line
+\&    } else {
+\&      print "Bash?"
+\&    }
+\&  }
+.Ve
+.IP "\(bu" 4
+\&\fB\f(CB\*(C`canon\-key key\*(C'\fB\fR \- 'canonical' key representation
+.Sp
+The key name converted to the one returned by \f(CW\*(C`list\-keys\*(C'\fR.
+.Sp
+Correct order of \f(CW\*(C`M\-\*(C'\fR, \f(CW\*(C`S\-\*(C'\fR, \f(CW\*(C`C\-\*(C'\fR and canonize some keys name e.g. PgUp writes as 'PPage'.
 .IP "\(bu" 4
 \&\fB\f(CB\*(C`nop [args ...]\*(C'\fB\fR \- consume all arguments, do nothing, return nothing
 .PP

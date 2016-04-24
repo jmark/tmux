@@ -399,6 +399,11 @@ int tcl_format_proc(
   return tcl_g->cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
 
+void args2dstring(Tcl_DString *dstr, struct args *args)
+{
+  args_iterate(args, (args2dstring_callback*)&Tcl_DStringAppendElement, dstr);
+}
+
 int tcl_tmuxparse_proc(
        ClientData clientData,
        Tcl_Interp *interp,
@@ -444,9 +449,7 @@ int tcl_tmuxparse_proc(
     struct cmd *cmd;
     TAILQ_FOREACH(cmd, &cmdlist->list, qentry) {
       Tcl_DStringAppendElement(&dstr, cmd->entry->name);
-      for (int i = 0; i < cmd->args->argc; i++) {
-        Tcl_DStringAppendElement(&dstr, cmd->args->argv[i]);
-      }
+      args2dstring(&dstr, cmd->args);
       Tcl_DStringAppend(&dstr, " ; \n", -1);
     }
 
@@ -461,6 +464,112 @@ int tcl_tmuxparse_proc(
 
   return TCL_OK;
 }
+
+
+int tcl_get_list_keys_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  const char * tablename = NULL;
+#define SHIFT_ARG(NAME)  \
+      if ((++argi) >= argc) { \
+        cmdq_error(tcl_g->cmdq, "get-list-keys " NAME ": argument required"); \
+        Tcl_AddErrorInfo(tcl_interp, "get-list-keys " NAME ": argument required"); \
+        goto error; \
+      } else { arg = argv[argi]; }
+  const char *arg;
+  int argi;
+  for (argi = 1; argi < argc; argi++) {
+    if (!strcmp(argv[argi], "-T")) {
+      SHIFT_ARG("-T");
+      tablename = arg;
+    } else {
+      cmdq_error(tcl_g->cmdq, "get-list-keys : unknown option %s", argv[argi]);
+      tcl_error_q("get-list-keys : unknown option");
+      goto error;
+    }
+  }
+#undef SHIFT_ARG
+
+  Tcl_DString dstr;
+  Tcl_DStringInit(&dstr);
+
+  // copy-paste from cmd_list_keys_exec
+  struct key_table *table;
+  RB_FOREACH(table, key_tables, &key_tables) {
+    if (tablename != NULL && strcmp(table->name, tablename) != 0)
+      continue;
+
+    struct key_binding *bd;
+    RB_FOREACH(bd, key_bindings, &table->key_bindings) {
+      Tcl_DStringStartSublist(&dstr);
+
+      Tcl_DStringAppendElement(&dstr, table->name);
+      Tcl_DStringAppendElement(&dstr, key_string_lookup_key(bd->key));
+
+      Tcl_DStringStartSublist(&dstr);
+      struct cmd_list *cmdlist = bd->cmdlist;
+      struct cmd *cmd;
+      TAILQ_FOREACH(cmd, &cmdlist->list, qentry) {
+        if (cmd->entry == &cmd_tcl_entry) {
+          for (int i = 0; i < cmd->args->argc; i++) {
+            Tcl_DStringAppend(&dstr, cmd->args->argv[i], -1);
+          }
+          Tcl_DStringAppend(&dstr, "\n", -1);
+        } else {
+          Tcl_DStringAppend(&dstr, "namespace eval ::tmux", -1);
+          Tcl_DStringStartSublist(&dstr);
+          Tcl_DStringAppendElement(&dstr, cmd->entry->name);
+          args2dstring(&dstr, cmd->args);
+          Tcl_DStringEndSublist(&dstr);
+          Tcl_DStringAppend(&dstr, " ; \n", -1);
+        }
+      }
+      Tcl_DStringEndSublist(&dstr);
+
+      if (bd->can_repeat)
+        Tcl_DStringAppendElement(&dstr, "-r");
+
+      Tcl_DStringEndSublist(&dstr);
+    }
+  }
+
+  Tcl_DStringResult(interp, &dstr);
+  Tcl_DStringFree(&dstr);
+
+  return TCL_OK;
+
+usage:
+error:
+  tcl_error("Usage: get-list-keys [-T table]\n");
+  return TCL_ERROR;
+}
+
+int tcl_canon_key_proc(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  if (argc != 2) goto usage;
+
+  Tcl_SetResult(interp,
+      xstrdup(
+        key_string_lookup_key(
+          key_string_lookup_string(
+            argv[1]))),
+      (Tcl_FreeProc*)free);
+
+  return TCL_OK;
+
+usage:
+error:
+  tcl_error("Usage: canon-key key\nReturn 'canonical' key representation");
+  return TCL_ERROR;
+}
+
 
 //Tcl_DString *tcl_global_dstrptr = NULL;
 void (*on_cmdq_print)(char * txt, char * txt_utf8) = NULL;
@@ -860,7 +969,7 @@ int tcl_using_context_proc(
        const char **argv)
 {
   if (argc == 1) goto error;
-  enum cmd_find_type find_type;
+  //enum cmd_find_type find_type;
 
   struct cmd_q          *cmdq = tcl_g->cmdq;
   struct client         *c = tcl_g->c;
@@ -1570,6 +1679,12 @@ void tcl_init(int argc, char **argv)
       (ClientData) 0, NULL ) ;
 
   tcl_create_command_override(tcl_interp, "copy-mode-selection", &tcl_copymodeselection_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_nooverride(tcl_interp, "get-list-keys", &tcl_get_list_keys_proc,
+      (ClientData) 0, NULL ) ;
+
+  tcl_create_command_nooverride(tcl_interp, "canon-key", &tcl_canon_key_proc,
       (ClientData) 0, NULL ) ;
 
 #define WINDOW_COPY_MODE_DATA__GET(X) \

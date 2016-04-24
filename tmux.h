@@ -1797,6 +1797,9 @@ const char	*args_get(struct args *, u_char);
 long long	 args_strtonum(struct args *, u_char, long long, long long,
 		     char **);
 
+typedef void args2dstring_callback(void *, const char *);
+void args_iterate(struct args *args, args2dstring_callback arg_fn, void *param);
+
 /* cmd-find.c */
 int		 cmd_find_current(struct cmd_find_state *, struct cmd_q *,
 		     int);
