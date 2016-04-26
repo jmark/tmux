@@ -1661,13 +1661,13 @@ void tcl_init(int argc, char **argv)
       (ClientData) 0, NULL ) ;
   tcl_create_command_nooverride(tcl_interp, "parse2script", &tcl_tmuxparse_proc,
       (ClientData) 1, NULL ) ;
-  Tcl_Eval(tcl_interp, "proc         parse2eval {str} { return [list namespace eval ::tmux [:parse2script $str]] }");
+  Tcl_Eval(tcl_interp, "proc         parse2eval {str} { return [list namespace eval ::tmux [parse2script $str]] }");
   Tcl_Eval(tcl_interp, "proc         parse_exec {str} { namespace eval ::tmux [:parse2script $str] }");
 
   tcl_create_command_override(tcl_interp, "_output-divert", &tcl_outputdivert_proc,
       (ClientData) 0, NULL ) ;
-  Tcl_Eval(tcl_interp, "proc output-of-txt {code} { :_output-divert start txt; uplevel $code; return [:_output-divert end]; }");
-  Tcl_Eval(tcl_interp, "proc output-of-list {code} { :_output-divert start list; uplevel $code; return [:_output-divert end]; }");
+  Tcl_Eval(tcl_interp, "proc output-of-txt {code} { _output-divert start txt; uplevel $code; return [_output-divert end]; }");
+  Tcl_Eval(tcl_interp, "proc output-of-list {code} { _output-divert start list; uplevel $code; return [_output-divert end]; }");
 
   tcl_create_command_override(tcl_interp, "pbcopy", &tcl_pbcopy_proc,
       (ClientData) 0, NULL ) ;
