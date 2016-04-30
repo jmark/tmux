@@ -1029,6 +1029,7 @@ The following keys are supported as appropriate for the mode:
 .It Li "Jump to backward" Ta "T" Ta ""
 .It Li "Jump to forward" Ta "t" Ta ""
 .It Li "Next page" Ta "C-f" Ta "Page down"
+.It Li "Next paragraph" Ta "}" Ta "M-}"
 .It Li "Next space" Ta "W" Ta ""
 .It Li "Next space, end of word" Ta "E" Ta ""
 .It Li "Next word" Ta "w" Ta ""
@@ -1036,6 +1037,7 @@ The following keys are supported as appropriate for the mode:
 .It Li "Other end of selection" Ta "o" Ta ""
 .It Li "Paste buffer" Ta "p" Ta "C-y"
 .It Li "Previous page" Ta "C-b" Ta "Page up"
+.It Li "Previous paragraph" Ta "{" Ta "M-{"
 .It Li "Previous space" Ta "B" Ta ""
 .It Li "Previous word" Ta "b" Ta "M-b"
 .It Li "Quit mode" Ta "q" Ta "Escape"
@@ -2776,19 +2778,17 @@ will be passed through
 and formats (see
 .Sx FORMATS )
 will be expanded.
-It may also contain any of the following special character sequences:
-.Bl -column "Character pair" "Replaced with" -offset indent
-.It Sy "Character pair" Ta Sy "Replaced with"
-.It Li "#[attributes]" Ta "Colour or attribute change"
-.It Li "##" Ta "A literal" Ql #
-.El
+It may also contain the special character sequence #[] to change the colour
+or attributes, for example
+.Ql #[fg=red,bright]
+to set a bright red foreground.
+See the
+.Ic message-command-style
+option for a description of colours and attributes.
 .Pp
 For details on how the names and titles can be set see the
 .Sx "NAMES AND TITLES"
 section.
-For a list of allowed attributes see the
-.Ic message-command-style
-option.
 .Pp
 Examples are:
 .Bd -literal -offset indent
@@ -3067,6 +3067,14 @@ Like
 .Ic base-index ,
 but set the starting index for pane numbers.
 .Pp
+.It Ic pane-border-format Ar format
+Set the text shown in pane border status lines.
+.Pp
+.It Xo Ic pane-border-status
+.Op Ic off | top | bottom
+.Xc
+Turn pane border status lines off or set their position.
+.Pp
 .It Ic pane-border-style Ar style
 Set the pane border style for panes aside from the active pane.
 For how to specify
@@ -3223,9 +3231,35 @@ shows only the option value, not the name.
 .Nm
 allows commands to run on various triggers, called
 .Em hooks .
-Each hook has a
-.Em name .
-The following hooks are available:
+Each
+.Nm
+command has a
+.Em before
+hook and an
+.Em after
+hook and there are a number of hooks not associated with commands.
+.Pp
+A command's before hook is run before the command is executed and its after
+hook is run afterwards, except when the command is run as part of a hook
+itself.
+Before hooks are named using the
+.Ql before-
+prefix and after hooks the
+.Ql after-
+prefix.
+For example, the following command adds a hook to select the even-vertical
+layout after every
+.Ic split-window :
+.Bd -literal -offset indent
+set-hook after-split-window "selectl even-vertical"
+.Ed
+.Pp
+Or to write when each new window is created to a file:
+.Bd -literal -offset indent
+set-hook before-new-window 'run "date >>/tmp/log"'
+.Ed
+.Pp
+In addition, the following hooks are available:
 .Bl -tag -width "XXXXXXXXXXXXXXXX"
 .It alert-activity
 Run when a window has activity.
@@ -3452,6 +3486,7 @@ The following variables are available, where appropriate:
 .It Li "client_tty" Ta "" Ta "Pseudo terminal of client"
 .It Li "client_utf8" Ta "" Ta "1 if client supports utf8"
 .It Li "client_width" Ta "" Ta "Width of client"
+.It Li "command_hooked" Ta "" Ta "Name of command hooked, if any"
 .It Li "command_name" Ta "" Ta "Name of command in use, if any"
 .It Li "cursor_flag" Ta "" Ta "Pane cursor flag"
 .It Li "cursor_x" Ta "" Ta "Cursor X position in pane"

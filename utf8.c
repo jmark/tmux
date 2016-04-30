@@ -18,6 +18,7 @@
 
 #include <sys/types.h>
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
@@ -115,8 +116,24 @@ utf8_width(wchar_t wc)
 	int	width;
 
 	width = wcwidth(wc);
-	if (width < 0 || width > 0xff)
+	if (width < 0 || width > 0xff) {
+		log_debug("Unicode %04x, wcwidth() %d", wc, width);
+
+#ifndef __OpenBSD__
+		/*
+		 * Many platforms (particularly and inevitably OS X) have no
+		 * width for relatively common characters (wcwidth() returns
+		 * -1); assume width 1 in this case. This will be wrong for
+		 * genuinely nonprintable characters, but they should be
+		 * rare. We may pass through stuff that ideally we would block,
+		 * but this is no worse than sending the same to the terminal
+		 * without tmux.
+		 */
+		if (width < 0)
+			return (1);
+#endif
 		return (-1);
+	}
 	return (width);
 }
 
@@ -126,6 +143,8 @@ utf8_combine(const struct utf8_data *ud, wchar_t *wc)
 {
 	switch (mbtowc(wc, ud->data, ud->size)) {
 	case -1:
+		log_debug("UTF-8 %.*s, mbtowc() %d", (int)ud->size, ud->data,
+		    errno);
 		mbtowc(NULL, NULL, MB_CUR_MAX);
 		return (UTF8_ERROR);
 	case 0:
