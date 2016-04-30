@@ -77,8 +77,6 @@ struct tcl_global_context {
 
 extern const struct cmd_entry cmd_attach_session_entry;
 
-#define tcl2tmux_call tcl2tmux_call2
-
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wunused-label"
@@ -247,6 +245,15 @@ tcl_cmdq_error(struct cmd_q *cmdq, const char *fmt, ...)
 
   free(msg);
 }
+
+/*
+ * There are 3 options how to call tmux commands from tcl:
+ * 1. Prepare args; directly call the command handler
+ * 2. Create cmd...cmdlist...cmdq; run cmdq
+ * 3. Create cmd...cmdlist; run within the client's cmdq
+*/
+#define tcl2tmux_call tcl2tmux_call3
+
 int tcl2tmux_call1(
        ClientData clientData,
        Tcl_Interp *interp,
@@ -328,6 +335,46 @@ int tcl2tmux_call2(
 
   cmd_list_free(cmdlist);
   cmdq_free(cmdq);
+
+  return tcl_g->cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
+}
+
+
+int tcl2tmux_call3(
+       ClientData clientData,
+       Tcl_Interp *interp,
+       int argc,
+       const char **argv)
+{
+  tcl_g->cmd_retval = CMD_RETURN_NORMAL;
+
+  struct cmd *cmd = xcalloc(1, sizeof *cmd);
+  cmd->entry = (struct cmd_entry *)clientData;
+  cmd->args = args_parse(cmd->entry->args.template, argc, argv);
+
+  // do some job of cmd_parse
+  if ((cmd->args == NULL) ||
+      (cmd->entry->args.lower != -1 && cmd->args->argc < cmd->entry->args.lower) ||
+      (cmd->entry->args.upper != -1 && cmd->args->argc > cmd->entry->args.upper))
+  {
+    free(cmd);
+    cmdq_error(tcl_g->cmdq, "tmux::usage: %s %s", cmd->entry->name, cmd->entry->usage);
+    Tcl_AddErrorInfo(tcl_interp, "tmux wrong number of args");
+    Tcl_SetErrorCode(tcl_interp, "tmux wrong number of args", NULL);
+    Tcl_SetResult(tcl_interp, "tmux wrong number of args", NULL);
+    tcl_g->cmd_retval = CMD_RETURN_ERROR;
+    return TCL_ERROR;
+  }
+
+  struct cmd_list *cmdlist = xcalloc(1, sizeof *cmdlist);
+  cmdlist->references = 1;
+  TAILQ_INIT(&cmdlist->list);
+
+  TAILQ_INSERT_TAIL(&cmdlist->list, cmd, qentry);
+
+  cmdq_run(tcl_g->cmdq, cmdlist, NULL);
+
+  cmd_list_free(cmdlist);
 
   return tcl_g->cmd_retval == CMD_RETURN_NORMAL ? TCL_OK : TCL_ERROR;
 }
