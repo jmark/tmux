@@ -98,6 +98,8 @@ cmd_new_window_exec(struct cmd *self, struct cmd_q *cmdq)
 		format_defaults(ft, c, s, NULL, NULL);
 		cwd = to_free = format_expand(ft, args_get(args, 'c'));
 		format_free(ft);
+        } else if ((cwd = osdep_get_cwd(s->curw->window->active->fd))) {
+		/* */
 	} else if (cmdq->client != NULL && cmdq->client->session == NULL)
 		cwd = cmdq->client->cwd;
 	else
