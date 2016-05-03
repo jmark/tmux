@@ -1406,7 +1406,8 @@ int tcl_modecmd_proc(
     return TCL_ERROR;
   }
 
-  if (wp->screen == &wp->base) {
+  //if (wp->screen == &wp->base) {
+  if (wp->mode == NULL) {
     tcl_error_q("mode command: pane not in 'mode'");
     return TCL_ERROR;
   }
