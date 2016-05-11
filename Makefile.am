@@ -2,12 +2,12 @@
 
 # Obvious program stuff.
 bin_PROGRAMS = tmux
-CLEANFILES = tmux.1.mdoc tmux.1.man
+CLEANFILES = tmux.1.mdoc tmux.1.man tmux-tcl.1.mdoc tmux-tcl.1.man
 
 # Distribution tarball options.
 EXTRA_DIST = \
 	CHANGES FAQ README TODO COPYING example_tmux.conf compat/*.[ch] \
-	compat.h tmux.h osdep-*.c xmalloc.h mdoc2man.awk tmux.1
+	compat.h tmux.h osdep-*.c xmalloc.h mdoc2man.awk tmux.1 tmux-tcl.1
 dist-hook:
 	make clean
 	grep "^#found_debug=" configure
@@ -246,10 +246,15 @@ install-exec-hook:
 	if test x@MANFORMAT@ = xmdoc; then \
 		sed -e "s|@SYSCONFDIR@|$(sysconfdir)|g" $(srcdir)/tmux.1 \
 			>$(srcdir)/tmux.1.mdoc; \
+		sed -e 's|README-TMUX-SCRIPTING|TMUX-SCRIPTING|g' $(srcdir)/tmux-tcl.1 > $(srcdir)/tmux-tcl.1.mdoc; \
 	else \
 		sed -e "s|@SYSCONFDIR@|$(sysconfdir)|g" $(srcdir)/tmux.1| \
 			$(AWK) -f$(srcdir)/mdoc2man.awk >$(srcdir)/tmux.1.man; \
+		sed -e 's|README-TMUX-SCRIPTING|TMUX-SCRIPTING|g' $(srcdir)/tmux-tcl.1| \
+		$(AWK) -f$(srcdir)/mdoc2man.awk >$(srcdir)/tmux-tcl.1.man; \
 	fi
 	$(mkdir_p) $(DESTDIR)$(mandir)/man1
 	$(INSTALL_DATA) $(srcdir)/tmux.1.@MANFORMAT@ \
 		$(DESTDIR)$(mandir)/man1/tmux.1
+	$(INSTALL_DATA) $(srcdir)/tmux-tcl.1.@MANFORMAT@ \
+		$(DESTDIR)$(mandir)/man1/tmux-tcl.1
