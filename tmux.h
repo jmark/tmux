@@ -1564,7 +1564,7 @@ extern int cfg_finished;
 extern int cfg_references;
 extern struct client *cfg_client;
 void		 start_cfg(void);
-int		 load_cfg(const char *, struct cmd_q *, char **);
+int		 load_cfg(const char *, struct cmd_q *, int);
 void		 set_cfg_file(const char *);
 void printflike(1, 2) cfg_add_cause(const char *, ...);
 void		 cfg_print_causes(struct cmd_q *);
@@ -1734,7 +1734,6 @@ void	tty_close(struct tty *);
 void	tty_free(struct tty *);
 void	tty_write(void (*)(struct tty *, const struct tty_ctx *),
 	    struct tty_ctx *);
-int	tty_client_ready(struct client *, struct window_pane *wp);
 void	tty_cmd_alignmenttest(struct tty *, const struct tty_ctx *);
 void	tty_cmd_cell(struct tty *, const struct tty_ctx *);
 void	tty_cmd_clearendofline(struct tty *, const struct tty_ctx *);
@@ -2234,7 +2233,7 @@ void		 window_copy_init_from_pane(struct window_pane *, int);
 void		 window_copy_init_for_output(struct window_pane *);
 void printflike(2, 3) window_copy_add(struct window_pane *, const char *, ...);
 void		 window_copy_vadd(struct window_pane *, const char *, va_list);
-void		 window_copy_pageup(struct window_pane *);
+void		 window_copy_pageup(struct window_pane *, int);
 void		 window_copy_start_drag(struct client *, struct mouse_event *);
 int		 window_copy_scroll_position(struct window_pane *);
 
