@@ -17,6 +17,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/ioctl.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -26,7 +27,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "tmux.h"
 
@@ -323,7 +326,7 @@ window_create(const char *name, int argc, char **argv, const char *path,
 	struct window_pane	*wp;
 
 	w = window_create1(sx, sy);
-	wp = window_add_pane(w, hlimit);
+	wp = window_add_pane(w, NULL, hlimit);
 	layout_init(w, wp);
 
 	if (window_pane_spawn(wp, argc, argv, path, shell, cwd, env, tio,
@@ -553,15 +556,19 @@ window_unzoom(struct window *w)
 }
 
 struct window_pane *
-window_add_pane(struct window *w, u_int hlimit)
+window_add_pane(struct window *w, struct window_pane *after, u_int hlimit)
 {
 	struct window_pane	*wp;
 
 	wp = window_pane_create(w, w->sx, w->sy, hlimit);
 	if (TAILQ_EMPTY(&w->panes))
 		TAILQ_INSERT_HEAD(&w->panes, wp, entry);
-	else
-		TAILQ_INSERT_AFTER(&w->panes, w->active, wp, entry);
+	else {
+		if (after == NULL)
+			TAILQ_INSERT_AFTER(&w->panes, w->active, wp, entry);
+		else
+			TAILQ_INSERT_AFTER(&w->panes, after, wp, entry);
+	}
 	return (wp);
 }
 
@@ -1057,14 +1064,37 @@ window_pane_alternate_off(struct window_pane *wp, struct grid_cell *gc,
 	wp->flags |= PANE_REDRAW;
 }
 
+static void
+window_pane_mode_timer(__unused int fd, __unused short events, void *arg)
+{
+	struct window_pane	*wp = arg;
+	struct timeval		 tv = { .tv_sec = 10 };
+	int			 n = 0;
+
+	evtimer_del(&wp->modetimer);
+	evtimer_add(&wp->modetimer, &tv);
+
+	log_debug("%%%u in mode: last=%ld", wp->id, (long)wp->modelast);
+
+	if (wp->modelast < time(NULL) - WINDOW_MODE_TIMEOUT) {
+		if (ioctl(wp->fd, FIONREAD, &n) == -1 || n > 0)
+			window_pane_reset_mode(wp);
+	}
+}
+
 int
 window_pane_set_mode(struct window_pane *wp, const struct window_mode *mode)
 {
 	struct screen	*s;
+	struct timeval	 tv = { .tv_sec = 10 };
 
 	if (wp->mode != NULL)
 		return (1);
 	wp->mode = mode;
+
+	wp->modelast = time(NULL);
+	evtimer_set(&wp->modetimer, window_pane_mode_timer, wp);
+	evtimer_add(&wp->modetimer, &tv);
 
 	if ((s = wp->mode->init(wp)) != NULL)
 		wp->screen = s;
@@ -1079,6 +1109,8 @@ window_pane_reset_mode(struct window_pane *wp)
 {
 	if (wp->mode == NULL)
 		return;
+
+	evtimer_del(&wp->modetimer);
 
 	wp->mode->free(wp);
 	wp->mode = NULL;
@@ -1099,6 +1131,7 @@ window_pane_key(struct window_pane *wp, struct client *c, struct session *s,
 		return;
 
 	if (wp->mode != NULL) {
+		wp->modelast = time(NULL);
 		if (wp->mode->key != NULL)
 			wp->mode->key(wp, c, s, key, m);
 		return;
