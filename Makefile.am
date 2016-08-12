@@ -199,9 +199,6 @@ endif
 if NO_DAEMON
 nodist_tmux_SOURCES += compat/daemon.c
 endif
-if NO_DAEMON
-nodist_tmux_SOURCES += compat/daemon.c
-endif
 if NO_GETPROGNAME
 nodist_tmux_SOURCES += compat/getprogname.c
 endif
