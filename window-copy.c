@@ -379,13 +379,13 @@ window_copy_pageup(struct window_pane *wp, int half_page)
 	}
 	data->cx = data->lastcx;
 
-	n = 1;
-	if (screen_size_y(s) > 2) {
-		if (half_page)
-			n = screen_size_y(s) / 2;
-		else
-			n = screen_size_y(s) - 2;
-	}
+	n = 5;
+	//if (screen_size_y(s) > 2) {
+	//	if (half_page)
+	//		n = screen_size_y(s) / 2;
+	//	else
+	//		n = screen_size_y(s) - 2;
+	//}
 
 	if (data->oy + n > screen_hsize(data->backing))
 		data->oy = screen_hsize(data->backing);
@@ -422,13 +422,13 @@ window_copy_pagedown(struct window_pane *wp, int half_page)
 	}
 	data->cx = data->lastcx;
 
-	n = 1;
-	if (screen_size_y(s) > 2) {
-		if (half_page)
-			n = screen_size_y(s) / 2;
-		else
-			n = screen_size_y(s) - 2;
-	}
+	n = 5;
+	//if (screen_size_y(s) > 2) {
+	//	if (half_page)
+	//		n = screen_size_y(s) / 2;
+	//	else
+	//		n = screen_size_y(s) - 2;
+	//}
 
 	if (data->oy < n)
 		data->oy = 0;
